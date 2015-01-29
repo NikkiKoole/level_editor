@@ -1,9 +1,17 @@
 <!doctype html>
 <html>
   <head>
+    <title>Some little wall drawing thing</title>
   </head>
   <body>
+    <span>
+    <button type="button" onclick="window.undo()">undo</button>
+    <button type="button" onclick="window.redo()">redo</button>
+    <label id="counter"># walls:0</label>
+    </span>
+</br>
     <script src="lib/pixi.dev.js"></script>
     <script src="bundle.js"></script>
+    
   </body>
 </html>

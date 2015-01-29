@@ -19,7 +19,6 @@ module.exports = class Graph
     constructor:->
         @map = new SpatialHash()
         @edges = []
-        console.log 'edges'
 
     getEdgesAttachedTo: (node) ->
         edges = []

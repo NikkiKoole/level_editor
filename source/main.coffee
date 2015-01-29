@@ -1,5 +1,4 @@
-#Graph = require './graph'
-{getLengthAndRotation, findIntersection} = require './math'
+{getLengthAndRotation, findIntersection, orderIntersections} = require './math'
 UndoRedo = require './undoredo'
 stage = null
 renderer = null          
@@ -8,28 +7,46 @@ removeItemFrom = (array, item) ->
     index = array.indexOf item
     if index > -1
         array.splice(index, 1)
-
+                                
 class Floorplan
     constructor: ->
         @walls = []
 
     addWall: (wall) ->
         diff = []
-        # this function now only checks all OTHER walls to see if they should be divided.
-        # I also think the original wall thats being added should be divided if it intersects others
+        intersections = []
         for w in @walls
             intersection = findIntersection(wall.a, wall.b, w.a, w.b)
             if intersection isnt undefined
-                diff.push ({operation:'remove', type:'wall', obj:w})
-                part1 = {a:w.a, b:intersection}
-                diff.push ({operation:'add', type:'wall', obj:part1})
-                part2 = {a:w.b, b:intersection}
-                diff.push ({operation:'add', type:'wall', obj:part2})
-        diff.push ({operation:'add', type:'wall', obj:wall})    
-        diff
+                intersections.push intersection
+                subdivideExistingWall(intersection, w, diff)
+        if intersections.length is 0
+            addWallSimply(wall, diff)
+        else
+            orderIntersections(wall, intersections)
+            intersections.unshift(wall.a)
+            intersections.push(wall.b)
+            subdivideNewWall(intersections, diff)
+        return diff
 
+addWallSimply = (wall, diff) ->
+    diff.push ({operation:'add', type:'wall', obj:wall})
+         
+subdivideExistingWall = (intersection, wall, diff) ->
+    diff.push ({operation:'remove', type:'wall', obj:wall})
+    part1 = {a:wall.a, b:intersection}
+    diff.push ({operation:'add', type:'wall', obj:part1})
+    part2 = {a:wall.b, b:intersection}
+    diff.push ({operation:'add', type:'wall', obj:part2})
+    diff
 
-                              
+subdivideNewWall = (intersections, diff) ->
+    for s,i in intersections
+        if i >= intersections.length-1
+            continue
+        part = {a:s, b:intersections[i+1]}
+        diff.push ({operation:'add', type:'wall', obj:part}) 
+                                                                                      
 class Editor extends PIXI.DisplayObjectContainer
     constructor: ->
         super()
@@ -68,6 +85,7 @@ class Editor extends PIXI.DisplayObjectContainer
         if putInUndoStack
             @undoRedo.clearRedoFuture() # kill 'back to the future alternate timeline'
             @undoRedo.constructUndoable diffs
+
         for diff in diffs
             if diff.type is 'wall'
                 if diff.operation is 'add'
@@ -91,9 +109,11 @@ class Editor extends PIXI.DisplayObjectContainer
                     @removeChild wallToDelete
                     removeItemFrom @walls, wallToDelete
                     removeItemFrom @floorplan.walls, wallToDelete.ref
-                    
-        console.log 'amount of editor  walls: ',@walls.length
-        console.log 'amount of FP  walls: ', @floorplan.walls.length
+        updateUICounter @walls.length       
+
+updateUICounter = (amount) ->
+    document.getElementById('counter').innerHTML = '# walls: '+amount
+
 
 stage = new PIXI.Stage(0x888888)
 renderer = new PIXI.autoDetectRenderer()
@@ -118,4 +138,4 @@ window.redo = ->
         renderer.render stage
 
 window.info = ->
-    editor.undoRedo.info() 
+    editor.undoRedo.info()

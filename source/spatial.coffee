@@ -1,3 +1,4 @@
+
 module.exports = class SpatialHash
     constructor: ->
         @map = {}
