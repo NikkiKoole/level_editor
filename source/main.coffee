@@ -1,50 +1,13 @@
-Graph = require './graph'
-
+#Graph = require './graph'
+{getLengthAndRotation, findIntersection} = require './math'
+UndoRedo = require './undoredo'
 stage = null
 renderer = null          
-
-getLengthAndRotation = (sp, ep) ->
-    middle: {x:(sp.x+ep.x) / 2, y:(sp.y+ep.y) / 2} # middle not needed anymore
-    length: Math.sqrt((sp.x-ep.x) * (sp.x-ep.x) + (sp.y-ep.y) * (sp.y-ep.y))
-    rotation: Math.atan2(ep.y-sp.y, ep.x-sp.x)
-
-findIntersection = (a, b, a1, b1) ->
-    dx = b.x - a.x
-    dy = b.y - a.y
-    dx1 = b1.x - a1.x
-    dy1 = b1.y - a1.y
-    denom = dx * dy1 - dx1 * dy
-
-    if denom is 0
-        return undefined
-
-    denomPositive = denom > 0
-
-    dxa = a.x - a1.x
-    dya = a.y - a1.y
-
-    s = dx * dya - dy * dxa
-
-    if (s < 0) is denomPositive
-        return undefined
-
-    t = dx1 * dya - dy1 * dxa
-
-    if (t < 0) is denomPositive
-        return undefined
-
-    if (s > denom) is denomPositive or (t > denom) is denomPositive
-        return undefined
-
-    t = t / denom
-    intersection = x:a.x + (t * dx), y:a.y + (t * dy)
-
 
 removeItemFrom = (array, item) ->
     index = array.indexOf item
     if index > -1
         array.splice(index, 1)
-      
 
 class Floorplan
     constructor: ->
@@ -66,48 +29,6 @@ class Floorplan
         diff
 
 
-class UndoRedo
-    constructor: ->
-        @undoStack = []
-        @redoStack = []
-
-    constructUndoable: (diffArray) ->
-        @undoStack.push @_negateAll(diffArray)
-        diffArray
-        
-    constructRedoable: (diffArray) ->
-        @redoStack.push @_negateAll(diffArray)
-        diffArray
-         
-    _negateAll: (array) ->
-        state = []
-        for diff in array
-            negated = @_negateDiff(diff)
-            state.push negated
-        state
-    _negateDiff: (diff) ->
-        negatedDiff = {}
-        if diff.operation is 'add'
-            negatedDiff.operation = 'remove'
-        else if diff.operation is 'remove'
-            negatedDiff.operation = 'add'
-        negatedDiff.type = diff.type
-        negatedDiff.obj = diff.obj
-        negatedDiff
-
-    info: ->
-        console.log 'undo length: ',@undoStack.length
-        console.log 'redo length: ',@redoStack.length
-        #console.log JSON.stringify(@undoStack)
-
-    clearRedoFuture: ->
-        @redoStack = []
-    
-    undo: ->
-        @constructRedoable @undoStack.pop()
-        
-    redo: ->
-        @constructUndoable @redoStack.pop()
                               
 class Editor extends PIXI.DisplayObjectContainer
     constructor: ->
@@ -140,16 +61,16 @@ class Editor extends PIXI.DisplayObjectContainer
         underlay.mouseup = (e) =>
             @dragging = false
             @tempGraphics.clear()
-            @applyDiff(@floorplan.addWall({a:@sp, b:@ep}))
+            @applyDiffs(@floorplan.addWall({a:@sp, b:@ep}))
             renderer.render stage
 
-    applyDiff: (diffs, putInUndoStack = true) ->
+    applyDiffs: (diffs, putInUndoStack = true) ->
         if putInUndoStack
-            @undoRedo.clearRedoFuture() 
+            @undoRedo.clearRedoFuture() # kill 'back to the future alternate timeline'
             @undoRedo.constructUndoable diffs
         for diff in diffs
-            if diff.operation is 'add'
-                if diff.type is 'wall'
+            if diff.type is 'wall'
+                if diff.operation is 'add'
                     wall = new PIXI.Graphics()
                     wall.beginFill(0xffffff * Math.random())
                     {length, rotation} = getLengthAndRotation(diff.obj.a, diff.obj.b)
@@ -161,8 +82,7 @@ class Editor extends PIXI.DisplayObjectContainer
                     @addChild wall
                     @walls.push wall
                     @floorplan.walls.push diff.obj
-            if diff.operation is 'remove'
-                if diff.type is 'wall'
+                if diff.operation is 'remove'
                     wallToDelete = undefined
                     for w in @walls
                         if w.ref is diff.obj
@@ -186,15 +106,15 @@ window.onload = ->
     renderer.render stage
     
 window.undo = ->
-    if editor.undoRedo.undoStack.length > 0
+    if editor.undoRedo.canUndo()
         d = editor.undoRedo.undo()
-        editor.applyDiff d, false
+        editor.applyDiffs d, false
         renderer.render stage
 
 window.redo = ->
-    if editor.undoRedo.redoStack.length > 0
+    if editor.undoRedo.canRedo()
         d = editor.undoRedo.redo()
-        editor.applyDiff d, false
+        editor.applyDiffs d, false
         renderer.render stage
 
 window.info = ->
