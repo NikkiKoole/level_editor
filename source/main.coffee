@@ -52,6 +52,8 @@ class Floorplan
 
     addWall: (wall) ->
         diff = []
+        # this function now only checks all OTHER walls to see if they should be divided.
+        # I also think the original wall thats being added should be divided if it intersects others
         for w in @walls
             intersection = findIntersection(wall.a, wall.b, w.a, w.b)
             if intersection isnt undefined
@@ -64,30 +66,22 @@ class Floorplan
         diff
 
 
-class UndoStack
+class UndoRedo
     constructor: ->
-        # will keep two containers.
-        @stack = []
+        @undoStack = []
         @redoStack = []
-        
+
     constructUndoable: (diffArray) ->
-        # given an array of diffs, this baby should create a way of undoing that.
-        # in a sense it's just a matter of negating each diff.
-        state = []
-        for diff in diffArray
-            negated = @_negateDiff(diff)
-            state.push negated
-        @stack.push state
+        @undoStack.push @_negateAll(diffArray)
+        diffArray
         
     constructRedoable: (diffArray) ->
-        state = []
-        for diff in diffArray
-            negated = @_negateDiff(diff)
-            state.push negated
-        @redoStack.push state  
+        @redoStack.push @_negateAll(diffArray)
+        diffArray
+         
     _negateAll: (array) ->
         state = []
-        for diff in diffArray
+        for diff in array
             negated = @_negateDiff(diff)
             state.push negated
         state
@@ -101,19 +95,19 @@ class UndoStack
         negatedDiff.obj = diff.obj
         negatedDiff
 
-    undo: ->
-        u = @stack.pop()
-        @constructRedoable u
-        console.log 'undo length: ',@stack.length
+    info: ->
+        console.log 'undo length: ',@undoStack.length
         console.log 'redo length: ',@redoStack.length
-        u
+        #console.log JSON.stringify(@undoStack)
+
+    clearRedoFuture: ->
+        @redoStack = []
+    
+    undo: ->
+        @constructRedoable @undoStack.pop()
         
     redo: ->
-        u = @redoStack.pop()
-        @constructUndoable u
-        console.log 'undo length: ',@stack.length
-        console.log 'redo length: ',@redoStack.length                
-        u
+        @constructUndoable @redoStack.pop()
                               
 class Editor extends PIXI.DisplayObjectContainer
     constructor: ->
@@ -127,7 +121,7 @@ class Editor extends PIXI.DisplayObjectContainer
         @addUnderlayEvents(@underlay)
         @floorplan = new Floorplan()
         @walls = []
-        @undoStack = new UndoStack()
+        @undoRedo = new UndoRedo()
         
     addUnderlayEvents: (underlay) ->
         underlay.mousedown = (e) =>
@@ -151,7 +145,8 @@ class Editor extends PIXI.DisplayObjectContainer
 
     applyDiff: (diffs, putInUndoStack = true) ->
         if putInUndoStack
-            @undoStack.constructUndoable diffs
+            @undoRedo.clearRedoFuture() 
+            @undoRedo.constructUndoable diffs
         for diff in diffs
             if diff.operation is 'add'
                 if diff.type is 'wall'
@@ -187,20 +182,20 @@ stage.addChild editor
 document.body.appendChild renderer.view
 
 
-
-
-#floorplan.addWall({a:a, b:b})
-
 window.onload = ->
     renderer.render stage
+    
 window.undo = ->
-    #console.log 'stack length: ', editor.undoStack.stack.length
-    #d = editor.undoStack.stack.pop()
-    d = editor.undoStack.undo()
-    editor.applyDiff d, false
-    renderer.render stage
+    if editor.undoRedo.undoStack.length > 0
+        d = editor.undoRedo.undo()
+        editor.applyDiff d, false
+        renderer.render stage
 
 window.redo = ->
-    d = editor.undoStack.redo()
-    editor.applyDiff d, false
-    renderer.render stage
+    if editor.undoRedo.redoStack.length > 0
+        d = editor.undoRedo.redo()
+        editor.applyDiff d, false
+        renderer.render stage
+
+window.info = ->
+    editor.undoRedo.info() 
