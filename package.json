@@ -1,0 +1,23 @@
+{
+  "name": "level_editor",
+  "version": "0.0.1",
+  "description": "A very cute ans tiny thing",
+  "main": "bundle.js",
+  "bin": {
+    "qudee": "bundle.js"
+  },
+  "repository" :
+   { "type" : "git"
+   , "url" : "https://github.com/NikkiKoole/level_editor.git"
+   },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "http-server" : "0.7.4",
+    "coffeeify" : "0.6.0",
+    "watchify": "0.4.1"
+  },
+  "author": "Nikki",
+  "license": "proprietary"
+}
