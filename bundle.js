@@ -1,25 +1,9 @@
 ;(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var Editor, Floorplan, UndoRedo, addWallSimply, editor, findIntersection, getLengthAndRotation, orderIntersections, removeItemFrom, renderer, stage, subdivideExistingWall, subdivideNewWall, updateUICounter, _ref,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+var Floorplan, addWallSimply, findIntersection, getLengthAndRotation, orderIntersections, subdivideExistingWall, subdivideNewWall, _ref;
 
 _ref = require('./math'), getLengthAndRotation = _ref.getLengthAndRotation, findIntersection = _ref.findIntersection, orderIntersections = _ref.orderIntersections;
 
-UndoRedo = require('./undoredo');
-
-stage = null;
-
-renderer = null;
-
-removeItemFrom = function(array, item) {
-  var index;
-  index = array.indexOf(item);
-  if (index > -1) {
-    return array.splice(index, 1);
-  }
-};
-
-Floorplan = (function() {
+module.exports = Floorplan = (function() {
   function Floorplan() {
     this.walls = [];
   }
@@ -109,6 +93,96 @@ subdivideNewWall = function(intersections, diff) {
   return _results;
 };
 
+
+},{"./math":3}],2:[function(require,module,exports){
+var Corner, CornerDict, Editor, Floorplan, UndoRedo, editor, getLengthAndRotation, removeItemFrom, renderer, roundAllValues, stage, updateUICounter,
+  __hasProp = {}.hasOwnProperty,
+  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+
+Floorplan = require('./floorplan');
+
+getLengthAndRotation = require('./math').getLengthAndRotation;
+
+UndoRedo = require('./undoredo');
+
+stage = null;
+
+renderer = null;
+
+removeItemFrom = function(array, item) {
+  var index;
+  index = array.indexOf(item);
+  if (index > -1) {
+    return array.splice(index, 1);
+  }
+};
+
+roundAllValues = function(p) {
+  p.a.x = parseInt(p.a.x);
+  p.a.y = parseInt(p.a.y);
+  p.b.x = parseInt(p.b.x);
+  return p.b.y = parseInt(p.b.y);
+};
+
+CornerDict = (function() {
+  function CornerDict() {
+    this.data = {};
+  }
+
+  CornerDict.prototype.createCorner = function(x, y) {
+    var corner, newlyMade;
+    console.log(x, y);
+    corner = this.data["" + x + "_" + y];
+    if (corner !== void 0) {
+      return corner;
+    }
+    newlyMade = new Corner(x, y);
+    this.data["" + x + "_" + y] = newlyMade;
+    return newlyMade;
+  };
+
+  CornerDict.prototype.all = function() {
+    var k, _ref, _results;
+    _ref = this.data;
+    _results = [];
+    for (k in _ref) {
+      if (!__hasProp.call(_ref, k)) continue;
+      _results.push(this.data[k]);
+    }
+    return _results;
+  };
+
+  return CornerDict;
+
+})();
+
+Corner = (function(_super) {
+  __extends(Corner, _super);
+
+  function Corner(x, y) {
+    var graphics;
+    Corner.__super__.constructor.call(this);
+    graphics = new PIXI.Graphics();
+    graphics.beginFill(0xffffff, 0.9);
+    graphics.drawCircle(0, 0, 10, 10);
+    this.addChild(graphics);
+    this.pivot = {
+      x: 0,
+      y: 0
+    };
+    this.position = {
+      x: x,
+      y: y
+    };
+    this.interactive = true;
+    this.walls = [];
+    this.visible = false;
+  }
+
+  return Corner;
+
+})(PIXI.DisplayObjectContainer);
+
 Editor = (function(_super) {
   __extends(Editor, _super);
 
@@ -123,49 +197,93 @@ Editor = (function(_super) {
     this.addUnderlayEvents(this.underlay);
     this.floorplan = new Floorplan();
     this.walls = [];
+    this.wallLayer = new PIXI.DisplayObjectContainer();
+    this.addChild(this.wallLayer);
+    this.cornerLayer = new PIXI.DisplayObjectContainer();
+    this.addChild(this.cornerLayer);
     this.undoRedo = new UndoRedo();
+    this.drawMode = void 0;
+    this.corners = new CornerDict();
   }
+
+  Editor.prototype.setDrawMode = function(mode) {
+    var c, _i, _j, _len, _len1, _ref, _ref1;
+    this.drawMode = mode;
+    if (mode === 'move') {
+      _ref = this.corners.all();
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        c = _ref[_i];
+        c.visible = true;
+      }
+      return renderer.render(stage);
+    } else if (mode === 'draw') {
+      _ref1 = this.corners.all();
+      for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+        c = _ref1[_j];
+        console.log(c.visible);
+        c.visible = false;
+      }
+      return renderer.render(stage);
+    }
+  };
 
   Editor.prototype.addUnderlayEvents = function(underlay) {
     underlay.mousedown = (function(_this) {
       return function(e) {
-        _this.dragging = true;
-        return _this.sp = {
-          x: e.global.x,
-          y: e.global.y
-        };
+        if (_this.drawMode === 'draw') {
+          _this.dragging = true;
+          return _this.sp = {
+            x: e.global.x,
+            y: e.global.y
+          };
+        }
       };
     })(this);
     underlay.mousemove = (function(_this) {
       return function(e) {
-        if (_this.dragging) {
-          _this.ep = {
-            x: e.global.x,
-            y: e.global.y
-          };
-          _this.tempGraphics.clear();
-          _this.tempGraphics.lineStyle(10, 0xaa00aa);
-          _this.tempGraphics.moveTo(_this.sp.x, _this.sp.y);
-          _this.tempGraphics.lineTo(_this.ep.x, _this.ep.y);
-          return renderer.render(stage);
+        if (_this.drawMode === 'draw') {
+          if (_this.dragging) {
+            _this.ep = {
+              x: e.global.x,
+              y: e.global.y
+            };
+            _this.tempGraphics.clear();
+            _this.tempGraphics.lineStyle(10, 0xaa00aa);
+            _this.tempGraphics.moveTo(_this.sp.x, _this.sp.y);
+            _this.tempGraphics.lineTo(_this.ep.x, _this.ep.y);
+            return renderer.render(stage);
+          }
         }
       };
     })(this);
     return underlay.mouseup = (function(_this) {
       return function(e) {
-        _this.dragging = false;
-        _this.tempGraphics.clear();
-        _this.applyDiffs(_this.floorplan.addWall({
-          a: _this.sp,
-          b: _this.ep
-        }));
-        return renderer.render(stage);
+        if (_this.drawMode === 'draw') {
+          _this.dragging = false;
+          _this.tempGraphics.clear();
+          _this.applyDiffs(_this.floorplan.addWall({
+            a: _this.sp,
+            b: _this.ep
+          }));
+          return renderer.render(stage);
+        }
+      };
+    })(this);
+  };
+
+  Editor.prototype.addCornerEvents = function(corner) {
+    this.draggingCorner = false;
+    return corner.click = (function(_this) {
+      return function() {
+        console.log(_this.draggingCorner);
+        console.log('asdadsasd');
+        return _this.draggingCorner = true;
       };
     })(this);
   };
 
   Editor.prototype.applyDiffs = function(diffs, putInUndoStack) {
-    var diff, length, rotation, w, wall, wallToDelete, _i, _j, _len, _len1, _ref1, _ref2;
+    var corner1, corner2, diff, length, rotation, w, wall, wallToDelete, _i, _j, _len, _len1, _ref, _ref1;
     if (putInUndoStack == null) {
       putInUndoStack = true;
     }
@@ -179,29 +297,38 @@ Editor = (function(_super) {
         if (diff.operation === 'add') {
           wall = new PIXI.Graphics();
           wall.beginFill(0xffffff * Math.random());
-          _ref1 = getLengthAndRotation(diff.obj.a, diff.obj.b), length = _ref1.length, rotation = _ref1.rotation;
-          wall.drawRect(0, -5, length, 10);
-          wall.position.x = diff.obj.a.x;
-          wall.position.y = diff.obj.a.y;
+          _ref = getLengthAndRotation(diff.obj.a, diff.obj.b), length = _ref.length, rotation = _ref.rotation;
+          wall.drawRect(0, -4, length, 8);
+          wall.position = diff.obj.a;
           wall.rotation = rotation;
           wall.ref = diff.obj;
-          this.addChild(wall);
           this.walls.push(wall);
+          corner1 = this.corners.createCorner(diff.obj.a.x, diff.obj.a.y);
+          this.cornerLayer.addChild(corner1);
+          this.addCornerEvents(corner1);
+          corner1.walls.push(wall);
+          corner2 = this.corners.createCorner(diff.obj.b.x, diff.obj.b.y);
+          this.cornerLayer.addChild(corner2);
+          this.addCornerEvents(corner2);
+          corner2.walls.push(wall);
+          this.wallLayer.addChild(wall);
           this.floorplan.walls.push(diff.obj);
         }
         if (diff.operation === 'remove') {
           wallToDelete = void 0;
-          _ref2 = this.walls;
-          for (_j = 0, _len1 = _ref2.length; _j < _len1; _j++) {
-            w = _ref2[_j];
+          _ref1 = this.walls;
+          for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
+            w = _ref1[_j];
             if (w.ref === diff.obj) {
               wallToDelete = w;
               continue;
             }
           }
-          this.removeChild(wallToDelete);
-          removeItemFrom(this.walls, wallToDelete);
-          removeItemFrom(this.floorplan.walls, wallToDelete.ref);
+          if (wallToDelete !== void 0) {
+            this.removeChild(wallToDelete);
+            removeItemFrom(this.walls, wallToDelete);
+            removeItemFrom(this.floorplan.walls, wallToDelete.ref);
+          }
         }
       }
     }
@@ -252,8 +379,12 @@ window.info = function() {
   return editor.undoRedo.info();
 };
 
+window.setDrawMode = function(mode) {
+  return editor.setDrawMode(mode.id);
+};
 
-},{"./math":2,"./undoredo":3}],2:[function(require,module,exports){
+
+},{"./floorplan":1,"./math":3,"./undoredo":4}],3:[function(require,module,exports){
 var getLengthAndRotation;
 
 module.exports.getLengthAndRotation = getLengthAndRotation = function(sp, ep) {
@@ -316,7 +447,7 @@ module.exports.findIntersection = function(a, b, a1, b1) {
 };
 
 
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 var UndoRedo;
 
 module.exports = UndoRedo = (function() {
@@ -390,5 +521,5 @@ module.exports = UndoRedo = (function() {
 })();
 
 
-},{}]},{},[1])
+},{}]},{},[2])
 ;

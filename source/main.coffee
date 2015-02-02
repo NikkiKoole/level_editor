@@ -1,4 +1,6 @@
-{getLengthAndRotation, findIntersection, orderIntersections} = require './math'
+Floorplan = require './floorplan'
+{getLengthAndRotation} = require './math'
+
 UndoRedo = require './undoredo'
 stage = null
 renderer = null          
@@ -7,46 +9,44 @@ removeItemFrom = (array, item) ->
     index = array.indexOf item
     if index > -1
         array.splice(index, 1)
-                                
-class Floorplan
+
+roundAllValues = (p) ->
+    p.a.x = parseInt p.a.x
+    p.a.y = parseInt p.a.y
+    p.b.x = parseInt p.b.x
+    p.b.y = parseInt p.b.y
+
+class CornerDict
     constructor: ->
+        @data = {}
+
+    createCorner: (x,y) ->
+        console.log x,y
+        corner = @data["#{x}_#{y}"]
+        if corner isnt undefined
+            return corner
+
+        newlyMade = new Corner(x, y)
+        @data["#{x}_#{y}"] = newlyMade
+        newlyMade
+    all: ->
+        for own k of @data
+            @data[k]
+
+        
+class Corner extends PIXI.DisplayObjectContainer
+    constructor: (x, y)->
+        super()
+        graphics = new PIXI.Graphics()
+        graphics.beginFill(0xffffff, 0.9)
+        graphics.drawCircle(0,0,10,10)
+        @addChild graphics
+        @pivot = x:0, y:0
+        @position = x:x, y:y
+        @interactive = true
         @walls = []
+        @visible = false
 
-    addWall: (wall) ->
-        diff = []
-        intersections = []
-        for w in @walls
-            intersection = findIntersection(wall.a, wall.b, w.a, w.b)
-            if intersection isnt undefined
-                intersections.push intersection
-                subdivideExistingWall(intersection, w, diff)
-        if intersections.length is 0
-            addWallSimply(wall, diff)
-        else
-            orderIntersections(wall, intersections)
-            intersections.unshift(wall.a)
-            intersections.push(wall.b)
-            subdivideNewWall(intersections, diff)
-        return diff
-
-addWallSimply = (wall, diff) ->
-    diff.push ({operation:'add', type:'wall', obj:wall})
-         
-subdivideExistingWall = (intersection, wall, diff) ->
-    diff.push ({operation:'remove', type:'wall', obj:wall})
-    part1 = {a:wall.a, b:intersection}
-    diff.push ({operation:'add', type:'wall', obj:part1})
-    part2 = {a:wall.b, b:intersection}
-    diff.push ({operation:'add', type:'wall', obj:part2})
-    diff
-
-subdivideNewWall = (intersections, diff) ->
-    for s,i in intersections
-        if i >= intersections.length-1
-            continue
-        part = {a:s, b:intersections[i+1]}
-        diff.push ({operation:'add', type:'wall', obj:part}) 
-                                                                                      
 class Editor extends PIXI.DisplayObjectContainer
     constructor: ->
         super()
@@ -59,28 +59,61 @@ class Editor extends PIXI.DisplayObjectContainer
         @addUnderlayEvents(@underlay)
         @floorplan = new Floorplan()
         @walls = []
-        @undoRedo = new UndoRedo()
+        @wallLayer = new PIXI.DisplayObjectContainer()
+        @addChild @wallLayer
+        @cornerLayer = new PIXI.DisplayObjectContainer()
+        @addChild @cornerLayer
         
+        @undoRedo = new UndoRedo()
+        @drawMode = undefined
+        @corners = new CornerDict()
+
+    setDrawMode: (mode) ->
+        @drawMode = mode
+        if mode is 'move'
+            for c in @corners.all()
+                c.visible = true
+            renderer.render stage
+                
+        else if mode is 'draw'
+            for c in @corners.all()
+                console.log c.visible
+                c.visible = false
+            renderer.render stage
+            
     addUnderlayEvents: (underlay) ->
         underlay.mousedown = (e) =>
-            @dragging = true
-            @sp = {x:e.global.x, y:e.global.y}
+            if @drawMode is 'draw'
+                @dragging = true
+                @sp = {x:e.global.x, y:e.global.y}
 
         underlay.mousemove = (e) =>
-            if @dragging
-                @ep = {x:e.global.x, y:e.global.y}
-                @tempGraphics.clear()
-                @tempGraphics.lineStyle(10,0xaa00aa)
-                @tempGraphics.moveTo(@sp.x, @sp.y)
-                @tempGraphics.lineTo(@ep.x, @ep.y)
-                renderer.render stage
+            if @drawMode is 'draw'
+                if @dragging
+                    @ep = {x:e.global.x, y:e.global.y}
+                    @tempGraphics.clear()
+                    @tempGraphics.lineStyle(10,0xaa00aa)
+                    @tempGraphics.moveTo(@sp.x, @sp.y)
+                    @tempGraphics.lineTo(@ep.x, @ep.y)
+                    renderer.render stage
                 
         underlay.mouseup = (e) =>
-            @dragging = false
-            @tempGraphics.clear()
-            @applyDiffs(@floorplan.addWall({a:@sp, b:@ep}))
-            renderer.render stage
+            if @drawMode is 'draw'
+                @dragging = false
+                @tempGraphics.clear()
+                @applyDiffs(@floorplan.addWall({a:@sp, b:@ep}))
+                renderer.render stage
 
+    addCornerEvents: (corner) ->
+        @draggingCorner = false
+
+        corner.click = =>
+            console.log @draggingCorner
+            console.log 'asdadsasd'
+            @draggingCorner = true
+
+
+    
     applyDiffs: (diffs, putInUndoStack = true) ->
         if putInUndoStack
             @undoRedo.clearRedoFuture() # kill 'back to the future alternate timeline'
@@ -91,24 +124,39 @@ class Editor extends PIXI.DisplayObjectContainer
                 if diff.operation is 'add'
                     wall = new PIXI.Graphics()
                     wall.beginFill(0xffffff * Math.random())
+                    #roundAllValues(diff.obj)
                     {length, rotation} = getLengthAndRotation(diff.obj.a, diff.obj.b)
-                    wall.drawRect(0, -5, length, 10)
-                    wall.position.x = diff.obj.a.x
-                    wall.position.y = diff.obj.a.y
+                    
+                    wall.drawRect(0, -4, length, 8)
+                    wall.position = diff.obj.a
                     wall.rotation = rotation
                     wall.ref = diff.obj
-                    @addChild wall
+                   
                     @walls.push wall
+                    
+                    corner1 = @corners.createCorner(diff.obj.a.x, diff.obj.a.y)
+                    @cornerLayer.addChild corner1
+                    @addCornerEvents corner1
+                    corner1.walls.push wall
+                    
+                    corner2 = @corners.createCorner(diff.obj.b.x, diff.obj.b.y) 
+                    @cornerLayer.addChild corner2
+                    @addCornerEvents corner2
+                    corner2.walls.push wall
+                    
+                    @wallLayer.addChild wall
                     @floorplan.walls.push diff.obj
+
                 if diff.operation is 'remove'
                     wallToDelete = undefined
                     for w in @walls
                         if w.ref is diff.obj
                             wallToDelete = w
                             continue
-                    @removeChild wallToDelete
-                    removeItemFrom @walls, wallToDelete
-                    removeItemFrom @floorplan.walls, wallToDelete.ref
+                    if wallToDelete isnt undefined
+                        @removeChild wallToDelete
+                        removeItemFrom @walls, wallToDelete
+                        removeItemFrom @floorplan.walls, wallToDelete.ref
         updateUICounter @walls.length       
 
 updateUICounter = (amount) ->
@@ -120,7 +168,6 @@ renderer = new PIXI.autoDetectRenderer()
 editor = new Editor()
 stage.addChild editor
 document.body.appendChild renderer.view
-
 
 window.onload = ->
     renderer.render stage
@@ -139,3 +186,7 @@ window.redo = ->
 
 window.info = ->
     editor.undoRedo.info()
+
+window.setDrawMode = (mode) ->
+    editor.setDrawMode(mode.id)
+    

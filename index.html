@@ -7,11 +7,19 @@
     <span>
     <button type="button" onclick="window.undo()">undo</button>
     <button type="button" onclick="window.redo()">redo</button>
+    <span id="form">
+      <input id="draw" type="radio" name="check" value="check1" onchange="window.setDrawMode(this)">
+      <label for="draw">draw</label>
+      <input id="move" type="radio" name="check" value="check2"  onchange="window.setDrawMode(this)">
+      <label for="move">move</label>
+    </span>
     <label id="counter"># walls:0</label>
     </span>
 </br>
     <script src="lib/pixi.js"></script>
     <script src="bundle.js"></script>
-    
+    <script>
+      var item = document.getElementById("draw").click();
+    </script>
   </body>
 </html>
