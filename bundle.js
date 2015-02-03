@@ -1,7 +1,47 @@
 ;(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var Floorplan, addWallSimply, findIntersection, getLengthAndRotation, orderIntersections, subdivideExistingWall, subdivideNewWall, _ref;
+var Floorplan, addWallSimply, anyIsEqual, anyWallEqual, findIntersection, getLengthAndRotation, orderIntersections, pointsAreEqual, subdivideExistingWall, subdivideNewWall, wallsAreEqual, _ref;
 
 _ref = require('./math'), getLengthAndRotation = _ref.getLengthAndRotation, findIntersection = _ref.findIntersection, orderIntersections = _ref.orderIntersections;
+
+wallsAreEqual = function(wall1, wall2) {
+  if (wall1.a.x === wall2.a.x && wall1.a.y === wall2.a.y) {
+    if (wall1.b.x === wall2.b.x && wall1.b.y === wall2.b.y) {
+      return true;
+    }
+  }
+  if (wall1.a.x === wall2.b.x && wall1.a.y === wall2.b.y) {
+    if (wall1.b.x === wall2.a.x && wall1.b.y === wall2.a.y) {
+      return true;
+    }
+  }
+  return false;
+};
+
+anyWallEqual = function(collection, w) {
+  var wall, _i, _len;
+  for (_i = 0, _len = collection.length; _i < _len; _i++) {
+    wall = collection[_i];
+    if (wallsAreEqual(wall, w)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+pointsAreEqual = function(p1, p2) {
+  return p1.x === p2.x && p1.y === p2.y;
+};
+
+anyIsEqual = function(collection, p) {
+  var c, _i, _len;
+  for (_i = 0, _len = collection.length; _i < _len; _i++) {
+    c = collection[_i];
+    if (pointsAreEqual(c, p)) {
+      return true;
+    }
+  }
+  return false;
+};
 
 module.exports = Floorplan = (function() {
   function Floorplan() {
@@ -17,17 +57,20 @@ module.exports = Floorplan = (function() {
       w = _ref1[_i];
       intersection = findIntersection(wall.a, wall.b, w.a, w.b);
       if (intersection !== void 0) {
+        if (anyIsEqual([wall.a, wall.b, w.a, w.b], intersection)) {
+          continue;
+        }
         intersections.push(intersection);
-        subdivideExistingWall(intersection, w, diff);
+        subdivideExistingWall(intersection, w, diff, this.walls);
       }
     }
     if (intersections.length === 0) {
-      addWallSimply(wall, diff);
+      addWallSimply(wall, diff, this.walls);
     } else {
       orderIntersections(wall, intersections);
       intersections.unshift(wall.a);
       intersections.push(wall.b);
-      subdivideNewWall(intersections, diff);
+      subdivideNewWall(intersections, diff, this.walls);
     }
     return diff;
   };
@@ -36,16 +79,20 @@ module.exports = Floorplan = (function() {
 
 })();
 
-addWallSimply = function(wall, diff) {
-  return diff.push({
-    operation: 'add',
-    type: 'wall',
-    obj: wall
-  });
+addWallSimply = function(wall, diff, walls) {
+  console.log('simple');
+  if (!anyWallEqual(walls, wall)) {
+    return diff.push({
+      operation: 'add',
+      type: 'wall',
+      obj: wall
+    });
+  }
 };
 
-subdivideExistingWall = function(intersection, wall, diff) {
+subdivideExistingWall = function(intersection, wall, diff, walls) {
   var part1, part2;
+  console.log('subdivide old');
   diff.push({
     operation: 'remove',
     type: 'wall',
@@ -55,25 +102,30 @@ subdivideExistingWall = function(intersection, wall, diff) {
     a: wall.a,
     b: intersection
   };
-  diff.push({
-    operation: 'add',
-    type: 'wall',
-    obj: part1
-  });
+  if (!anyWallEqual(walls, part1)) {
+    diff.push({
+      operation: 'add',
+      type: 'wall',
+      obj: part1
+    });
+  }
   part2 = {
     a: wall.b,
     b: intersection
   };
-  diff.push({
-    operation: 'add',
-    type: 'wall',
-    obj: part2
-  });
+  if (!anyWallEqual(walls, part2)) {
+    diff.push({
+      operation: 'add',
+      type: 'wall',
+      obj: part2
+    });
+  }
   return diff;
 };
 
-subdivideNewWall = function(intersections, diff) {
+subdivideNewWall = function(intersections, diff, walls) {
   var i, part, s, _i, _len, _results;
+  console.log('subdivide new');
   _results = [];
   for (i = _i = 0, _len = intersections.length; _i < _len; i = ++_i) {
     s = intersections[i];
@@ -84,18 +136,22 @@ subdivideNewWall = function(intersections, diff) {
       a: s,
       b: intersections[i + 1]
     };
-    _results.push(diff.push({
-      operation: 'add',
-      type: 'wall',
-      obj: part
-    }));
+    if (!anyWallEqual(walls, part)) {
+      _results.push(diff.push({
+        operation: 'add',
+        type: 'wall',
+        obj: part
+      }));
+    } else {
+      _results.push(void 0);
+    }
   }
   return _results;
 };
 
 
 },{"./math":3}],2:[function(require,module,exports){
-var Corner, CornerDict, Editor, Floorplan, UndoRedo, editor, getLengthAndRotation, getOther, isInArray, removeItemFrom, renderer, stage, updateUICounter,
+var Corner, CornerDict, Editor, Floorplan, UndoRedo, editor, getLengthAndRotation, getOther, isInArray, pointAreEqual, removeItemFrom, renderer, roundAllValues, stage, updateUICounter,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -122,13 +178,28 @@ isInArray = function(array, item) {
 };
 
 getOther = function(test, pair) {
-  var v, _i, _len;
-  for (_i = 0, _len = pair.length; _i < _len; _i++) {
-    v = pair[_i];
+  var i, v, _i, _len;
+  for (i = _i = 0, _len = pair.length; _i < _len; i = ++_i) {
+    v = pair[i];
     if (v.x !== test.x || v.y !== test.y) {
-      return v;
+      return {
+        value: v,
+        index: i
+      };
     }
   }
+};
+
+roundAllValues = function(p) {
+  p.a.x = parseInt(p.a.x);
+  p.a.y = parseInt(p.a.y);
+  p.b.x = parseInt(p.b.x);
+  p.b.y = parseInt(p.b.y);
+  return p;
+};
+
+pointAreEqual = function(p1, p2) {
+  return p1.x === p2.x && p1.y === p2.y;
 };
 
 CornerDict = (function() {
@@ -252,7 +323,7 @@ Editor = (function(_super) {
     return underlay.mouseup = (function(_this) {
       return function(e) {
         if (_this.drawMode === 'draw') {
-          if (_this.sp && _this.ep) {
+          if ((_this.sp && _this.ep) && (!pointAreEqual(_this.sp, _this.ep))) {
             _this.dragging = false;
             _this.tempGraphics.clear();
             _this.applyDiffs(_this.floorplan.addWall({
@@ -288,26 +359,27 @@ Editor = (function(_super) {
     })(this);
     corner.mouseup = corner.mouseupoutside = (function(_this) {
       return function(e) {
-        var a, b, diffs, wall, _i, _len, _ref;
+        var a, addDiffs, b, d, d2, diffs, newer, removeDiffs, wall, _i, _j, _k, _len, _len1, _len2, _ref;
         if (_this.drawMode === 'move') {
           if (_this.usingCorner && (_this.usingCorner === corner)) {
             _this.usingCorner.alpha = 1;
+            removeDiffs = [];
+            addDiffs = [];
             diffs = [];
             _ref = _this.usingCorner.walls;
             for (_i = 0, _len = _ref.length; _i < _len; _i++) {
               wall = _ref[_i];
-              wall.alpha = 1;
-              a = {
-                x: e.global.x,
-                y: e.global.y
-              };
-              b = getOther(_this.usingCorner.position, [wall.ref.a, wall.ref.b]);
-              diffs.push({
+              removeDiffs.push({
                 operation: 'remove',
                 type: 'wall',
                 obj: wall.ref
               });
-              diffs.push({
+              a = {
+                x: e.global.x,
+                y: e.global.y
+              };
+              b = getOther(_this.usingCorner.position, [wall.ref.a, wall.ref.b]).value;
+              addDiffs.push({
                 operation: 'add',
                 type: 'wall',
                 obj: {
@@ -318,7 +390,17 @@ Editor = (function(_super) {
             }
             _this.usingCorner = void 0;
             _this.tempGraphics.clear();
-            _this.applyDiffs(diffs);
+            _this.applyDiffs(removeDiffs);
+            d2 = [];
+            for (_j = 0, _len1 = addDiffs.length; _j < _len1; _j++) {
+              d = addDiffs[_j];
+              newer = _this.floorplan.addWall(d.obj);
+              for (_k = 0, _len2 = newer.length; _k < _len2; _k++) {
+                b = newer[_k];
+                d2.push(b);
+              }
+            }
+            _this.applyDiffs(d2);
             return renderer.render(stage);
           }
         }
@@ -337,7 +419,7 @@ Editor = (function(_super) {
               wall = _ref[_i];
               _this.tempGraphics.lineStyle(10, 0xffff00);
               _this.tempGraphics.moveTo(e.global.x, e.global.y);
-              p = getOther(_this.usingCorner.position, [wall.ref.a, wall.ref.b]);
+              p = getOther(_this.usingCorner.position, [wall.ref.a, wall.ref.b]).value;
               _this.tempGraphics.lineTo(p.x, p.y);
             }
             return renderer.render(stage);
@@ -360,6 +442,7 @@ Editor = (function(_super) {
       diff = diffs[_i];
       if (diff.type === 'wall') {
         if (diff.operation === 'add') {
+          diff.obj = roundAllValues(diff.obj);
           wall = new PIXI.Graphics();
           wall.beginFill(0xffffff * Math.random());
           _ref = getLengthAndRotation(diff.obj.a, diff.obj.b), length = _ref.length, rotation = _ref.rotation;

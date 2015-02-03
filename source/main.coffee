@@ -14,9 +14,19 @@ isInArray = (array, item) ->
     (array.indexOf item) isnt -1
 
 getOther = (test, pair) ->
-    for v in pair
+    for v,i in pair
         if v.x isnt test.x or v.y isnt test.y
-            return v
+            return {value:v, index:i}
+      
+roundAllValues = (p) ->
+    p.a.x = parseInt p.a.x
+    p.a.y = parseInt p.a.y
+    p.b.x = parseInt p.b.x
+    p.b.y = parseInt p.b.y
+    p
+
+pointAreEqual = (p1, p2) ->
+    (p1.x is p2.x and p1.y is p2.y)
         
 
 class CornerDict
@@ -73,7 +83,6 @@ class Editor extends PIXI.DisplayObjectContainer
         @undoRedo = new UndoRedo()
         @drawMode = undefined
         @corners = new CornerDict()
-        
 
     setDrawMode: (mode) ->
         @drawMode = mode
@@ -96,7 +105,7 @@ class Editor extends PIXI.DisplayObjectContainer
                 
         underlay.mouseup = (e) =>
             if @drawMode is 'draw'
-                if (@sp and @ep)
+                if (@sp and @ep) and (not pointAreEqual(@sp, @ep))
                     @dragging = false
                     @tempGraphics.clear()
                     @applyDiffs(@floorplan.addWall({a:@sp, b:@ep}))
@@ -117,21 +126,26 @@ class Editor extends PIXI.DisplayObjectContainer
             if @drawMode is 'move'
                 if @usingCorner and (@usingCorner is corner)
                     @usingCorner.alpha = 1
+                    removeDiffs = []
+                    addDiffs = []
                     diffs = []
                     for wall in @usingCorner.walls
-                        wall.alpha = 1
+                        removeDiffs.push {operation:'remove', type:'wall', obj:wall.ref}
                         a = x:e.global.x, y:e.global.y
-                        b = getOther(@usingCorner.position, [wall.ref.a, wall.ref.b])
-                        diffs.push {operation:'remove', type:'wall', obj:wall.ref}
-                        diffs.push {operation:'add', type:'wall', obj:{a:a,b:b}}
-                        # actually getting the updated wall to make new corners appears harder then just doing a @floorplan.addWall
-                        #@applyDiffs([{operation:'remove', type:'wall', obj:wall.ref}])
-                        #add = @floorplan.addWall({a:a, b:b})
-                        #for d in add
-                        #    diffs.push d
+                        b = getOther(@usingCorner.position, [wall.ref.a, wall.ref.b]).value
+                        addDiffs.push {operation:'add', type:'wall', obj:{a:a,b:b}}
                     @usingCorner = undefined
                     @tempGraphics.clear()
-                    @applyDiffs(diffs)
+                    # todo think of a way of combining these two removeDiffs/d2 succesfully.
+                    # maybe I can make a floorplan.updateWall function that returns a diff.
+
+                    @applyDiffs removeDiffs
+                    d2 = []
+                    for d in addDiffs
+                        newer = @floorplan.addWall(d.obj)
+                        for b in newer
+                            d2.push b
+                    @applyDiffs(d2)
                     renderer.render stage
 
         corner.mousemove = (e) =>
@@ -143,7 +157,7 @@ class Editor extends PIXI.DisplayObjectContainer
                     for wall in @usingCorner.walls
                         @tempGraphics.lineStyle(10, 0xffff00)
                         @tempGraphics.moveTo(e.global.x, e.global.y)
-                        p = getOther(@usingCorner.position, [wall.ref.a, wall.ref.b])
+                        p = getOther(@usingCorner.position, [wall.ref.a, wall.ref.b]).value
                         @tempGraphics.lineTo(p.x, p.y)
                     renderer.render stage
 
@@ -153,10 +167,13 @@ class Editor extends PIXI.DisplayObjectContainer
         if putInUndoStack
             @undoRedo.clearRedoFuture() # kill 'back to the future alternate timeline'
             @undoRedo.constructUndoable diffs
-
+        #console.log '...'
         for diff in diffs
             if diff.type is 'wall'
+                #console.log diff.operation, diff.obj.a, diff.obj.b
                 if diff.operation is 'add'
+                    diff.obj = roundAllValues diff.obj
+                    
                     wall = new PIXI.Graphics()
                     wall.beginFill(0xffffff * Math.random())
                     {length, rotation} = getLengthAndRotation(diff.obj.a, diff.obj.b)
