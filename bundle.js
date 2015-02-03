@@ -95,7 +95,7 @@ subdivideNewWall = function(intersections, diff) {
 
 
 },{"./math":3}],2:[function(require,module,exports){
-var Corner, CornerDict, Editor, Floorplan, UndoRedo, editor, getLengthAndRotation, removeItemFrom, renderer, roundAllValues, stage, updateUICounter,
+var Corner, CornerDict, Editor, Floorplan, UndoRedo, editor, getLengthAndRotation, getOther, isInArray, removeItemFrom, renderer, stage, updateUICounter,
   __hasProp = {}.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
@@ -117,11 +117,18 @@ removeItemFrom = function(array, item) {
   }
 };
 
-roundAllValues = function(p) {
-  p.a.x = parseInt(p.a.x);
-  p.a.y = parseInt(p.a.y);
-  p.b.x = parseInt(p.b.x);
-  return p.b.y = parseInt(p.b.y);
+isInArray = function(array, item) {
+  return (array.indexOf(item)) !== -1;
+};
+
+getOther = function(test, pair) {
+  var v, _i, _len;
+  for (_i = 0, _len = pair.length; _i < _len; _i++) {
+    v = pair[_i];
+    if (v.x !== test.x || v.y !== test.y) {
+      return v;
+    }
+  }
 };
 
 CornerDict = (function() {
@@ -131,7 +138,6 @@ CornerDict = (function() {
 
   CornerDict.prototype.createCorner = function(x, y) {
     var corner, newlyMade;
-    console.log(x, y);
     corner = this.data["" + x + "_" + y];
     if (corner !== void 0) {
       return corner;
@@ -139,6 +145,10 @@ CornerDict = (function() {
     newlyMade = new Corner(x, y);
     this.data["" + x + "_" + y] = newlyMade;
     return newlyMade;
+  };
+
+  CornerDict.prototype.remove = function(c) {
+    return delete this.data["" + c.x + "_" + c.y];
   };
 
   CornerDict.prototype.all = function() {
@@ -176,7 +186,7 @@ Corner = (function(_super) {
     };
     this.interactive = true;
     this.walls = [];
-    this.visible = false;
+    this.visible = true;
   }
 
   return Corner;
@@ -193,7 +203,6 @@ Editor = (function(_super) {
     this.underlay.interactive = true;
     this.addChild(this.underlay);
     this.tempGraphics = new PIXI.Graphics();
-    this.addChild(this.tempGraphics);
     this.addUnderlayEvents(this.underlay);
     this.floorplan = new Floorplan();
     this.walls = [];
@@ -201,30 +210,14 @@ Editor = (function(_super) {
     this.addChild(this.wallLayer);
     this.cornerLayer = new PIXI.DisplayObjectContainer();
     this.addChild(this.cornerLayer);
+    this.addChild(this.tempGraphics);
     this.undoRedo = new UndoRedo();
     this.drawMode = void 0;
     this.corners = new CornerDict();
   }
 
   Editor.prototype.setDrawMode = function(mode) {
-    var c, _i, _j, _len, _len1, _ref, _ref1;
-    this.drawMode = mode;
-    if (mode === 'move') {
-      _ref = this.corners.all();
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        c = _ref[_i];
-        c.visible = true;
-      }
-      return renderer.render(stage);
-    } else if (mode === 'draw') {
-      _ref1 = this.corners.all();
-      for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
-        c = _ref1[_j];
-        console.log(c.visible);
-        c.visible = false;
-      }
-      return renderer.render(stage);
-    }
+    return this.drawMode = mode;
   };
 
   Editor.prototype.addUnderlayEvents = function(underlay) {
@@ -259,31 +252,103 @@ Editor = (function(_super) {
     return underlay.mouseup = (function(_this) {
       return function(e) {
         if (_this.drawMode === 'draw') {
-          _this.dragging = false;
-          _this.tempGraphics.clear();
-          _this.applyDiffs(_this.floorplan.addWall({
-            a: _this.sp,
-            b: _this.ep
-          }));
-          return renderer.render(stage);
+          if (_this.sp && _this.ep) {
+            _this.dragging = false;
+            _this.tempGraphics.clear();
+            _this.applyDiffs(_this.floorplan.addWall({
+              a: _this.sp,
+              b: _this.ep
+            }));
+            _this.sp = void 0;
+            _this.ep = void 0;
+            return renderer.render(stage);
+          }
         }
       };
     })(this);
   };
 
   Editor.prototype.addCornerEvents = function(corner) {
-    this.draggingCorner = false;
-    return corner.click = (function(_this) {
+    this.usingCorner = void 0;
+    corner.mousedown = (function(_this) {
       return function() {
-        console.log(_this.draggingCorner);
-        console.log('asdadsasd');
-        return _this.draggingCorner = true;
+        var wall, _i, _len, _ref, _results;
+        if (_this.drawMode === 'move') {
+          _this.usingCorner = corner;
+          _this.usingCorner.alpha = 0.1;
+          _ref = _this.usingCorner.walls;
+          _results = [];
+          for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+            wall = _ref[_i];
+            _results.push(wall.alpha = 0.1);
+          }
+          return _results;
+        }
+      };
+    })(this);
+    corner.mouseup = corner.mouseupoutside = (function(_this) {
+      return function(e) {
+        var a, b, diffs, wall, _i, _len, _ref;
+        if (_this.drawMode === 'move') {
+          if (_this.usingCorner && (_this.usingCorner === corner)) {
+            _this.usingCorner.alpha = 1;
+            diffs = [];
+            _ref = _this.usingCorner.walls;
+            for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+              wall = _ref[_i];
+              wall.alpha = 1;
+              a = {
+                x: e.global.x,
+                y: e.global.y
+              };
+              b = getOther(_this.usingCorner.position, [wall.ref.a, wall.ref.b]);
+              diffs.push({
+                operation: 'remove',
+                type: 'wall',
+                obj: wall.ref
+              });
+              diffs.push({
+                operation: 'add',
+                type: 'wall',
+                obj: {
+                  a: a,
+                  b: b
+                }
+              });
+            }
+            _this.usingCorner = void 0;
+            _this.tempGraphics.clear();
+            _this.applyDiffs(diffs);
+            return renderer.render(stage);
+          }
+        }
+      };
+    })(this);
+    return corner.mousemove = (function(_this) {
+      return function(e) {
+        var p, wall, _i, _len, _ref;
+        if (_this.drawMode === 'move') {
+          if (_this.usingCorner && (_this.usingCorner === corner)) {
+            _this.tempGraphics.clear();
+            _this.tempGraphics.beginFill(0xff0000);
+            _this.tempGraphics.drawCircle(e.global.x, e.global.y, 10, 10);
+            _ref = _this.usingCorner.walls;
+            for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+              wall = _ref[_i];
+              _this.tempGraphics.lineStyle(10, 0xffff00);
+              _this.tempGraphics.moveTo(e.global.x, e.global.y);
+              p = getOther(_this.usingCorner.position, [wall.ref.a, wall.ref.b]);
+              _this.tempGraphics.lineTo(p.x, p.y);
+            }
+            return renderer.render(stage);
+          }
+        }
       };
     })(this);
   };
 
   Editor.prototype.applyDiffs = function(diffs, putInUndoStack) {
-    var corner1, corner2, diff, length, rotation, w, wall, wallToDelete, _i, _j, _len, _len1, _ref, _ref1;
+    var c, corner1, corner2, diff, length, rotation, w, wall, wallToDelete, _i, _j, _k, _len, _len1, _len2, _ref, _ref1, _ref2;
     if (putInUndoStack == null) {
       putInUndoStack = true;
     }
@@ -304,12 +369,16 @@ Editor = (function(_super) {
           wall.ref = diff.obj;
           this.walls.push(wall);
           corner1 = this.corners.createCorner(diff.obj.a.x, diff.obj.a.y);
-          this.cornerLayer.addChild(corner1);
-          this.addCornerEvents(corner1);
+          if (!(isInArray(this.cornerLayer.children, corner1))) {
+            this.cornerLayer.addChild(corner1);
+            this.addCornerEvents(corner1);
+          }
           corner1.walls.push(wall);
           corner2 = this.corners.createCorner(diff.obj.b.x, diff.obj.b.y);
-          this.cornerLayer.addChild(corner2);
-          this.addCornerEvents(corner2);
+          if (!(isInArray(this.cornerLayer.children, corner2))) {
+            this.cornerLayer.addChild(corner2);
+            this.addCornerEvents(corner2);
+          }
           corner2.walls.push(wall);
           this.wallLayer.addChild(wall);
           this.floorplan.walls.push(diff.obj);
@@ -325,22 +394,31 @@ Editor = (function(_super) {
             }
           }
           if (wallToDelete !== void 0) {
-            this.removeChild(wallToDelete);
+            this.wallLayer.removeChild(wallToDelete);
             removeItemFrom(this.walls, wallToDelete);
             removeItemFrom(this.floorplan.walls, wallToDelete.ref);
+            _ref2 = this.corners.all();
+            for (_k = 0, _len2 = _ref2.length; _k < _len2; _k++) {
+              c = _ref2[_k];
+              removeItemFrom(c.walls, wallToDelete);
+              if (c.walls.length === 0) {
+                this.corners.remove(c);
+                this.cornerLayer.removeChild(c);
+              }
+            }
           }
         }
       }
     }
-    return updateUICounter(this.walls.length);
+    return updateUICounter(this.walls.length, this.corners.all().length);
   };
 
   return Editor;
 
 })(PIXI.DisplayObjectContainer);
 
-updateUICounter = function(amount) {
-  return document.getElementById('counter').innerHTML = '# walls: ' + amount;
+updateUICounter = function(amount, amount2) {
+  return document.getElementById('counter').innerHTML = '# walls: ' + amount + " corners length: " + amount2;
 };
 
 stage = new PIXI.Stage(0x888888);

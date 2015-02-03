@@ -10,25 +10,30 @@ removeItemFrom = (array, item) ->
     if index > -1
         array.splice(index, 1)
 
-roundAllValues = (p) ->
-    p.a.x = parseInt p.a.x
-    p.a.y = parseInt p.a.y
-    p.b.x = parseInt p.b.x
-    p.b.y = parseInt p.b.y
+isInArray = (array, item) ->
+    (array.indexOf item) isnt -1
+
+getOther = (test, pair) ->
+    for v in pair
+        if v.x isnt test.x or v.y isnt test.y
+            return v
+        
 
 class CornerDict
     constructor: ->
         @data = {}
 
     createCorner: (x,y) ->
-        console.log x,y
         corner = @data["#{x}_#{y}"]
         if corner isnt undefined
             return corner
-
         newlyMade = new Corner(x, y)
         @data["#{x}_#{y}"] = newlyMade
         newlyMade
+
+    remove: (c) ->
+        delete @data["#{c.x}_#{c.y}"]
+
     all: ->
         for own k of @data
             @data[k]
@@ -45,7 +50,7 @@ class Corner extends PIXI.DisplayObjectContainer
         @position = x:x, y:y
         @interactive = true
         @walls = []
-        @visible = false
+        @visible = true
 
 class Editor extends PIXI.DisplayObjectContainer
     constructor: ->
@@ -55,7 +60,7 @@ class Editor extends PIXI.DisplayObjectContainer
         @underlay.interactive = true
         @addChild @underlay
         @tempGraphics = new PIXI.Graphics()
-        @addChild @tempGraphics
+        
         @addUnderlayEvents(@underlay)
         @floorplan = new Floorplan()
         @walls = []
@@ -63,24 +68,16 @@ class Editor extends PIXI.DisplayObjectContainer
         @addChild @wallLayer
         @cornerLayer = new PIXI.DisplayObjectContainer()
         @addChild @cornerLayer
-        
+
+        @addChild @tempGraphics
         @undoRedo = new UndoRedo()
         @drawMode = undefined
         @corners = new CornerDict()
+        
 
     setDrawMode: (mode) ->
         @drawMode = mode
-        if mode is 'move'
-            for c in @corners.all()
-                c.visible = true
-            renderer.render stage
-                
-        else if mode is 'draw'
-            for c in @corners.all()
-                console.log c.visible
-                c.visible = false
-            renderer.render stage
-            
+
     addUnderlayEvents: (underlay) ->
         underlay.mousedown = (e) =>
             if @drawMode is 'draw'
@@ -99,18 +96,56 @@ class Editor extends PIXI.DisplayObjectContainer
                 
         underlay.mouseup = (e) =>
             if @drawMode is 'draw'
-                @dragging = false
-                @tempGraphics.clear()
-                @applyDiffs(@floorplan.addWall({a:@sp, b:@ep}))
-                renderer.render stage
+                if (@sp and @ep)
+                    @dragging = false
+                    @tempGraphics.clear()
+                    @applyDiffs(@floorplan.addWall({a:@sp, b:@ep}))
+                    @sp = undefined
+                    @ep = undefined
+                    renderer.render stage
 
     addCornerEvents: (corner) ->
-        @draggingCorner = false
+        @usingCorner = undefined
+        corner.mousedown = =>
+            if @drawMode is 'move'
+                @usingCorner = corner
+                @usingCorner.alpha = 0.1
+                for wall in @usingCorner.walls
+                    wall.alpha = 0.1
+            
+        corner.mouseup = corner.mouseupoutside = (e) =>
+            if @drawMode is 'move'
+                if @usingCorner and (@usingCorner is corner)
+                    @usingCorner.alpha = 1
+                    diffs = []
+                    for wall in @usingCorner.walls
+                        wall.alpha = 1
+                        a = x:e.global.x, y:e.global.y
+                        b = getOther(@usingCorner.position, [wall.ref.a, wall.ref.b])
+                        diffs.push {operation:'remove', type:'wall', obj:wall.ref}
+                        diffs.push {operation:'add', type:'wall', obj:{a:a,b:b}}
+                        # actually getting the updated wall to make new corners appears harder then just doing a @floorplan.addWall
+                        #@applyDiffs([{operation:'remove', type:'wall', obj:wall.ref}])
+                        #add = @floorplan.addWall({a:a, b:b})
+                        #for d in add
+                        #    diffs.push d
+                    @usingCorner = undefined
+                    @tempGraphics.clear()
+                    @applyDiffs(diffs)
+                    renderer.render stage
 
-        corner.click = =>
-            console.log @draggingCorner
-            console.log 'asdadsasd'
-            @draggingCorner = true
+        corner.mousemove = (e) =>
+            if @drawMode is 'move'
+                if @usingCorner and (@usingCorner is corner)
+                    @tempGraphics.clear()
+                    @tempGraphics.beginFill(0xff0000)
+                    @tempGraphics.drawCircle(e.global.x, e.global.y, 10, 10)
+                    for wall in @usingCorner.walls
+                        @tempGraphics.lineStyle(10, 0xffff00)
+                        @tempGraphics.moveTo(e.global.x, e.global.y)
+                        p = getOther(@usingCorner.position, [wall.ref.a, wall.ref.b])
+                        @tempGraphics.lineTo(p.x, p.y)
+                    renderer.render stage
 
 
     
@@ -124,7 +159,6 @@ class Editor extends PIXI.DisplayObjectContainer
                 if diff.operation is 'add'
                     wall = new PIXI.Graphics()
                     wall.beginFill(0xffffff * Math.random())
-                    #roundAllValues(diff.obj)
                     {length, rotation} = getLengthAndRotation(diff.obj.a, diff.obj.b)
                     
                     wall.drawRect(0, -4, length, 8)
@@ -135,13 +169,15 @@ class Editor extends PIXI.DisplayObjectContainer
                     @walls.push wall
                     
                     corner1 = @corners.createCorner(diff.obj.a.x, diff.obj.a.y)
-                    @cornerLayer.addChild corner1
-                    @addCornerEvents corner1
+                    if not (isInArray @cornerLayer.children, corner1) # this IF might be unneeded but I want to be sure
+                        @cornerLayer.addChild corner1
+                        @addCornerEvents corner1
                     corner1.walls.push wall
                     
-                    corner2 = @corners.createCorner(diff.obj.b.x, diff.obj.b.y) 
-                    @cornerLayer.addChild corner2
-                    @addCornerEvents corner2
+                    corner2 = @corners.createCorner(diff.obj.b.x, diff.obj.b.y)
+                    if not (isInArray @cornerLayer.children, corner2) # this IF might be unneeded but I want to be sure
+                        @cornerLayer.addChild corner2
+                        @addCornerEvents corner2
                     corner2.walls.push wall
                     
                     @wallLayer.addChild wall
@@ -154,13 +190,20 @@ class Editor extends PIXI.DisplayObjectContainer
                             wallToDelete = w
                             continue
                     if wallToDelete isnt undefined
-                        @removeChild wallToDelete
+                        @wallLayer.removeChild wallToDelete
                         removeItemFrom @walls, wallToDelete
                         removeItemFrom @floorplan.walls, wallToDelete.ref
-        updateUICounter @walls.length       
 
-updateUICounter = (amount) ->
-    document.getElementById('counter').innerHTML = '# walls: '+amount
+                        for c in @corners.all()
+                            removeItemFrom c.walls, wallToDelete
+                            if c.walls.length is 0
+                                @corners.remove(c)
+                                @cornerLayer.removeChild c
+                                
+        updateUICounter @walls.length, @corners.all().length  
+
+updateUICounter = (amount, amount2) ->
+    document.getElementById('counter').innerHTML = '# walls: '+amount+" corners length: "+amount2
 
 
 stage = new PIXI.Stage(0x888888)
