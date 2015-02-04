@@ -1,4 +1,6 @@
-{getLengthAndRotation, findIntersection, orderIntersections} = require './math'
+{getLengthAndRotation, findIntersection, orderIntersections, getOther} = require './math'
+
+
 
 wallsAreEqual = (wall1, wall2) ->
     if wall1.a.x is wall2.a.x and wall1.a.y is wall2.a.y
@@ -28,6 +30,14 @@ module.exports = class Floorplan
     constructor: ->
         @walls = []
 
+    updateWall:(wall, p1, p2) ->
+        diffs = []
+        diffs.push {operation:'remove', type:'wall', obj:wall.ref}
+        a = p1
+        b = getOther(p2, [wall.ref.a, wall.ref.b])
+        diffs.push  {operation:'add', type:'wall', obj:{a:a,b:b}}
+        diffs
+
     addWall: (wall) ->
         diff = []
         intersections = []
@@ -48,6 +58,7 @@ module.exports = class Floorplan
             intersections.push(wall.b)
             subdivideNewWall(intersections, diff, @walls)
         return diff
+
 
 addWallSimply = (wall, diff, walls) ->
     diff.push ({operation:'add', type:'wall', obj:wall})

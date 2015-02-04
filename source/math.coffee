@@ -3,6 +3,11 @@ module.exports.getLengthAndRotation = getLengthAndRotation = (sp, ep) ->
     length: Math.sqrt((sp.x-ep.x) * (sp.x-ep.x) + (sp.y-ep.y) * (sp.y-ep.y))
     rotation: Math.atan2(ep.y-sp.y, ep.x-sp.x)
 
+module.exports.getOther = (test, pair) ->
+    for v in pair
+        if v.x isnt test.x or v.y isnt test.y
+            return v
+
 module.exports.orderIntersections = (line, intersections) ->
     # I will order the intersections using distance from line.a
     distanceTo = (a,b) ->

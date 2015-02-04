@@ -1,5 +1,5 @@
 Floorplan = require './floorplan'
-{getLengthAndRotation} = require './math'
+{getLengthAndRotation, getOther} = require './math'
 
 UndoRedo = require './undoredo'
 stage = null
@@ -13,10 +13,6 @@ removeItemFrom = (array, item) ->
 isInArray = (array, item) ->
     (array.indexOf item) isnt -1
 
-getOther = (test, pair) ->
-    for v in pair
-        if v.x isnt test.x or v.y isnt test.y
-            return v
 
 roundAllValues = (p) ->
     p.a.x = parseInt p.a.x
@@ -159,15 +155,13 @@ class Editor extends PIXI.DisplayObjectContainer
         @draggingCorner.alpha = 1
         diffs = []
         for wall in @draggingCorner.walls
-            diffs.push {operation:'remove', type:'wall', obj:wall.ref}
-            a = position
-            b = getOther(@draggingCorner.position, [wall.ref.a, wall.ref.b])
-            diffs.push  {operation:'add', type:'wall', obj:{a:a,b:b}}
+            diffs = diffs.concat(@floorplan.updateWall(wall, position, @draggingCorner.position))
         @draggingCorner = undefined
         @tempGraphics.clear()
         @applyDiffs diffs
-        
 
+                
+# mouseinput eventhandlers
     addUnderlayEvents: (underlay) ->
         underlay.mousedown = (e) =>
             if @mode is 'draw'
@@ -200,7 +194,6 @@ class Editor extends PIXI.DisplayObjectContainer
         corner.mousedown = =>
             if @mode is 'move'
                 @startDraggingCorner(corner)
-
             if @mode is 'draw' and (@sp is undefined)
                 @startDrawingLine({x:corner.position.x, y:corner.position.y})
 
@@ -211,7 +204,6 @@ class Editor extends PIXI.DisplayObjectContainer
         corner.mouseup = corner.mouseupoutside = (e) =>
             if @mode is 'move' and (@draggingCorner is corner)
                 @endDraggingCorner({x:e.global.x, y:e.global.y})
-
             if @mode is 'draw' and @drawingLine and (@lastOverCorner is corner)
                 @endDrawingLine( {x:corner.position.x, y:corner.position.y})
                            
@@ -219,6 +211,7 @@ class Editor extends PIXI.DisplayObjectContainer
         if putInUndoStack
             @undoRedo.clearRedoFuture() # kill 'back to the future alternate timeline'
             @undoRedo.constructUndoable diffs
+            
         for diff in diffs
             if diff.type is 'wall'
                 if diff.operation is 'add'
