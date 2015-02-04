@@ -122,11 +122,13 @@ class Editor extends PIXI.DisplayObjectContainer
         @drawingRect = false
         @ep = endPosition
         @tempGraphics.clear()
-        diffs = []
-        diffs = diffs.concat(@floorplan.addWall({a:{x:@sp.x, y:@sp.y}, b:{x:@ep.x, y:@sp.y}}))
-        diffs = diffs.concat(@floorplan.addWall({a:{x:@ep.x, y:@sp.y}, b:{x:@ep.x, y:@ep.y}}))
-        diffs = diffs.concat(@floorplan.addWall({a:{x:@ep.x, y:@ep.y}, b:{x:@sp.x, y:@ep.y}}))
-        diffs = diffs.concat(@floorplan.addWall({a:{x:@sp.x, y:@ep.y}, b:{x:@sp.x, y:@sp.y}}))
+        toAdd = [
+            {a:{x:@sp.x, y:@sp.y}, b:{x:@ep.x, y:@sp.y}}
+            {a:{x:@ep.x, y:@sp.y}, b:{x:@ep.x, y:@ep.y}}
+            {a:{x:@ep.x, y:@ep.y}, b:{x:@sp.x, y:@ep.y}}
+            {a:{x:@sp.x, y:@ep.y}, b:{x:@sp.x, y:@sp.y}}
+            ]
+        diffs = @floorplan.addMultipleWalls(toAdd)
         @applyDiffs(diffs)
         @sp = undefined
         @ep = undefined
