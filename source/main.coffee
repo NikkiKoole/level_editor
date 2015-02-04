@@ -14,10 +14,10 @@ isInArray = (array, item) ->
     (array.indexOf item) isnt -1
 
 getOther = (test, pair) ->
-    for v,i in pair
+    for v in pair
         if v.x isnt test.x or v.y isnt test.y
-            return {value:v, index:i}
-      
+            return v
+
 roundAllValues = (p) ->
     p.a.x = parseInt p.a.x
     p.a.y = parseInt p.a.y
@@ -81,85 +81,110 @@ class Editor extends PIXI.DisplayObjectContainer
 
         @addChild @tempGraphics
         @undoRedo = new UndoRedo()
-        @drawMode = undefined
+        @mode = undefined
         @corners = new CornerDict()
 
-    setDrawMode: (mode) ->
-        @drawMode = mode
+    setMode: (mode) ->
+        @mode = mode
+        
+# drawing Lines
+    startDrawingLine: (startPosition) ->
+        @drawingLine = true
+        @sp = startPosition
+        @ep = undefined # paranoia
+
+    updateDrawingLine: (endPosition) ->
+        @ep = endPosition
+        @tempGraphics.clear()
+        @tempGraphics.lineStyle(10,0xaa00aa)
+        @tempGraphics.moveTo(@sp.x, @sp.y)
+        @tempGraphics.lineTo(@ep.x, @ep.y)
+        
+    endDrawingLine: (endPosition = @ep) ->
+        @ep = endPosition
+        @drawingLine = false
+        @tempGraphics.clear()
+        @applyDiffs(@floorplan.addWall({a:@sp, b:@ep}))
+        @sp = undefined
+        @ep = undefined
+        
+# dragging Corners
+    startDraggingCorner: (corner) ->
+        @draggingCorner = corner
+        @draggingCorner.alpha = 0.1
+        for wall in @draggingCorner.walls
+            wall.alpha = 0.1
+            
+    updateDraggingCorner: (position) ->
+        @tempGraphics.clear()
+        @tempGraphics.beginFill(0xff0000)
+        @tempGraphics.drawCircle(position.x, position.y, 10, 10)
+        for wall in @draggingCorner.walls
+            @tempGraphics.lineStyle(10, 0xffff00)
+            @tempGraphics.moveTo(position.x, position.y)
+            p = getOther(@draggingCorner.position, [wall.ref.a, wall.ref.b])
+            @tempGraphics.lineTo(p.x, p.y)
+
+    endDraggingCorner: (position)->
+        @draggingCorner.alpha = 1
+        diffs = []
+        for wall in @draggingCorner.walls
+            diffs.push {operation:'remove', type:'wall', obj:wall.ref}
+            a = position
+            b = getOther(@draggingCorner.position, [wall.ref.a, wall.ref.b])
+            diffs.push  {operation:'add', type:'wall', obj:{a:a,b:b}}
+        @draggingCorner = undefined
+        @tempGraphics.clear()
+        @applyDiffs diffs
+        
 
     addUnderlayEvents: (underlay) ->
         underlay.mousedown = (e) =>
-            if @drawMode is 'draw'
-                @dragging = true
-                @sp = {x:e.global.x, y:e.global.y}
+            if @mode is 'draw'
+                @startDrawingLine({x:e.global.x, y:e.global.y})
 
         underlay.mousemove = (e) =>
-            if @drawMode is 'draw'
-                if @dragging
-                    @ep = {x:e.global.x, y:e.global.y}
-                    @tempGraphics.clear()
-                    @tempGraphics.lineStyle(10,0xaa00aa)
-                    @tempGraphics.moveTo(@sp.x, @sp.y)
-                    @tempGraphics.lineTo(@ep.x, @ep.y)
-                    renderer.render stage
-                
+            if @mode is 'draw' and @drawingLine
+                @updateDrawingLine({x:e.global.x, y:e.global.y})
+               
         underlay.mouseup = (e) =>
-            if @drawMode is 'draw'
-                if (@sp and @ep) and (not pointAreEqual(@sp, @ep))
-                    @dragging = false
-                    @tempGraphics.clear()
-                    @applyDiffs(@floorplan.addWall({a:@sp, b:@ep}))
-                    @sp = undefined
-                    @ep = undefined
-                    renderer.render stage
+            if @mode is 'draw' and (not pointAreEqual(@sp, @ep))
+                @endDrawingLine()
 
     addCornerEvents: (corner) ->
-        @usingCorner = undefined
-        corner.mousedown = =>
-            if @drawMode is 'move'
-                @usingCorner = corner
-                @usingCorner.alpha = 0.1
-                for wall in @usingCorner.walls
-                    wall.alpha = 0.1
+        corner.mouseover = (e) =>
+            @lastOverCorner = corner
+            corner.scale = x:1.5, y:1.5
+
+
+        corner.mouseout = (e) =>
+            corner.scale = x:1, y:1
+            @lastOverCorner = undefined
             
-        corner.mouseup = corner.mouseupoutside = (e) =>
-            if @drawMode is 'move'
-                if @usingCorner and (@usingCorner is corner)
-                    @usingCorner.alpha = 1
-                    diffs = []
-                    for wall in @usingCorner.walls
-                        
-                        diffs.push {operation:'remove', type:'wall', obj:wall.ref}
-                        a = x:e.global.x, y:e.global.y
-                        b = getOther(@usingCorner.position, [wall.ref.a, wall.ref.b]).value
-                        diffs.push  {operation:'add', type:'wall', obj:{a:a,b:b}}
-                    @usingCorner = undefined
-                    @tempGraphics.clear()
-                    @applyDiffs diffs
-                    renderer.render stage
+        corner.mousedown = =>
+            if @mode is 'move'
+                @startDraggingCorner(corner)
+
+            if @mode is 'draw' and (@sp is undefined)
+                @startDrawingLine({x:corner.position.x, y:corner.position.y})
 
         corner.mousemove = (e) =>
-            if @drawMode is 'move'
-                if @usingCorner and (@usingCorner is corner)
-                    @tempGraphics.clear()
-                    @tempGraphics.beginFill(0xff0000)
-                    @tempGraphics.drawCircle(e.global.x, e.global.y, 10, 10)
-                    for wall in @usingCorner.walls
-                        @tempGraphics.lineStyle(10, 0xffff00)
-                        @tempGraphics.moveTo(e.global.x, e.global.y)
-                        p = getOther(@usingCorner.position, [wall.ref.a, wall.ref.b]).value
-                        @tempGraphics.lineTo(p.x, p.y)
-                    renderer.render stage
+            if @mode is 'move' and (@draggingCorner is corner)
+                @updateDraggingCorner({x:e.global.x, y:e.global.y})
+                    
+        corner.mouseup = corner.mouseupoutside = (e) =>
+            if @mode is 'move' and (@draggingCorner is corner)
+                @endDraggingCorner({x:e.global.x, y:e.global.y})
 
-
-    
+            if @mode is 'draw' and @drawingLine and (@lastOverCorner is corner)
+                @endDrawingLine( {x:corner.position.x, y:corner.position.y})
+                           
     applyDiffs: (diffs, putInUndoStack = true) ->
         if putInUndoStack
             @undoRedo.clearRedoFuture() # kill 'back to the future alternate timeline'
             @undoRedo.constructUndoable diffs
         for diff in diffs
             if diff.type is 'wall'
-                #console.log diff.operation, diff.obj.a, diff.obj.b
                 if diff.operation is 'add'
                     diff.obj = roundAllValues diff.obj
                     
@@ -193,6 +218,7 @@ class Editor extends PIXI.DisplayObjectContainer
                         if w.ref is diff.obj
                             wallToDelete = w
                             continue
+
                     if wallToDelete isnt undefined
                         @wallLayer.removeChild wallToDelete
                         removeItemFrom @walls, wallToDelete
@@ -203,8 +229,9 @@ class Editor extends PIXI.DisplayObjectContainer
                             if c.walls.length is 0
                                 @corners.remove(c)
                                 @cornerLayer.removeChild c
-                                
-        updateUICounter @walls.length, @corners.all().length  
+
+        updateUICounter @walls.length, @corners.all().length
+         
 
 updateUICounter = (amount, amount2) ->
     document.getElementById('counter').innerHTML = '# walls: '+amount+" corners length: "+amount2
@@ -212,28 +239,33 @@ updateUICounter = (amount, amount2) ->
 
 stage = new PIXI.Stage(0x888888)
 renderer = new PIXI.autoDetectRenderer()
+
+
 editor = new Editor()
 stage.addChild editor
 document.body.appendChild renderer.view
 
-window.onload = ->
+update = ->
+    requestAnimFrame update
     renderer.render stage
-    
+
+window.onload = ->
+    update()
+
+
 window.undo = ->
     if editor.undoRedo.canUndo()
         d = editor.undoRedo.undo()
         editor.applyDiffs d, false
-        renderer.render stage
 
 window.redo = ->
     if editor.undoRedo.canRedo()
         d = editor.undoRedo.redo()
         editor.applyDiffs d, false
-        renderer.render stage
 
 window.info = ->
     editor.undoRedo.info()
 
 window.setDrawMode = (mode) ->
-    editor.setDrawMode(mode.id)
+    editor.setMode(mode.id)
     
