@@ -36,8 +36,6 @@ module.exports = class Floorplan
         for w in @walls
             intersection = findIntersection(wall.a, wall.b, w.a, w.b)
             if intersection isnt undefined
-                if (anyIsEqual([wall.a, wall.b, w.a, w.b], intersection))
-                    continue
                 intersections.push intersection
                 subdivideExistingWall(intersection, w, diff, @walls)
                 
@@ -52,21 +50,16 @@ module.exports = class Floorplan
 
 addWallSimply = (wall, diff, walls) ->
     console.log 'simple'
-    if not anyWallEqual(walls, wall)
-        diff.push ({operation:'add', type:'wall', obj:wall})
+    diff.push ({operation:'add', type:'wall', obj:wall})
          
 subdivideExistingWall = (intersection, wall, diff, walls) ->
     console.log 'subdivide old'
     diff.push ({operation:'remove', type:'wall', obj:wall})
     part1 = {a:wall.a, b:intersection}
-    if not anyWallEqual(walls, part1)
-        diff.push ({operation:'add', type:'wall', obj:part1})
+    diff.push ({operation:'add', type:'wall', obj:part1})
     
     part2 = {a:wall.b, b:intersection}
-    if not anyWallEqual(walls, part2)
-        diff.push ({operation:'add', type:'wall', obj:part2})
-
-    
+    diff.push ({operation:'add', type:'wall', obj:part2})
     diff
 
 subdivideNewWall = (intersections, diff, walls) ->
@@ -75,5 +68,4 @@ subdivideNewWall = (intersections, diff, walls) ->
         if i >= intersections.length-1
             continue
         part = {a:s, b:intersections[i+1]}
-        if not anyWallEqual(walls, part)
-            diff.push ({operation:'add', type:'wall', obj:part}) 
+        diff.push ({operation:'add', type:'wall', obj:part}) 

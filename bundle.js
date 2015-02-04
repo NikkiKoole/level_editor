@@ -57,9 +57,6 @@ module.exports = Floorplan = (function() {
       w = _ref1[_i];
       intersection = findIntersection(wall.a, wall.b, w.a, w.b);
       if (intersection !== void 0) {
-        if (anyIsEqual([wall.a, wall.b, w.a, w.b], intersection)) {
-          continue;
-        }
         intersections.push(intersection);
         subdivideExistingWall(intersection, w, diff, this.walls);
       }
@@ -81,13 +78,11 @@ module.exports = Floorplan = (function() {
 
 addWallSimply = function(wall, diff, walls) {
   console.log('simple');
-  if (!anyWallEqual(walls, wall)) {
-    return diff.push({
-      operation: 'add',
-      type: 'wall',
-      obj: wall
-    });
-  }
+  return diff.push({
+    operation: 'add',
+    type: 'wall',
+    obj: wall
+  });
 };
 
 subdivideExistingWall = function(intersection, wall, diff, walls) {
@@ -102,24 +97,20 @@ subdivideExistingWall = function(intersection, wall, diff, walls) {
     a: wall.a,
     b: intersection
   };
-  if (!anyWallEqual(walls, part1)) {
-    diff.push({
-      operation: 'add',
-      type: 'wall',
-      obj: part1
-    });
-  }
+  diff.push({
+    operation: 'add',
+    type: 'wall',
+    obj: part1
+  });
   part2 = {
     a: wall.b,
     b: intersection
   };
-  if (!anyWallEqual(walls, part2)) {
-    diff.push({
-      operation: 'add',
-      type: 'wall',
-      obj: part2
-    });
-  }
+  diff.push({
+    operation: 'add',
+    type: 'wall',
+    obj: part2
+  });
   return diff;
 };
 
@@ -136,15 +127,11 @@ subdivideNewWall = function(intersections, diff, walls) {
       a: s,
       b: intersections[i + 1]
     };
-    if (!anyWallEqual(walls, part)) {
-      _results.push(diff.push({
-        operation: 'add',
-        type: 'wall',
-        obj: part
-      }));
-    } else {
-      _results.push(void 0);
-    }
+    _results.push(diff.push({
+      operation: 'add',
+      type: 'wall',
+      obj: part
+    }));
   }
   return _results;
 };
@@ -359,17 +346,15 @@ Editor = (function(_super) {
     })(this);
     corner.mouseup = corner.mouseupoutside = (function(_this) {
       return function(e) {
-        var a, addDiffs, b, d, d2, diffs, newer, removeDiffs, wall, _i, _j, _k, _len, _len1, _len2, _ref;
+        var a, b, diffs, wall, _i, _len, _ref;
         if (_this.drawMode === 'move') {
           if (_this.usingCorner && (_this.usingCorner === corner)) {
             _this.usingCorner.alpha = 1;
-            removeDiffs = [];
-            addDiffs = [];
             diffs = [];
             _ref = _this.usingCorner.walls;
             for (_i = 0, _len = _ref.length; _i < _len; _i++) {
               wall = _ref[_i];
-              removeDiffs.push({
+              diffs.push({
                 operation: 'remove',
                 type: 'wall',
                 obj: wall.ref
@@ -379,7 +364,7 @@ Editor = (function(_super) {
                 y: e.global.y
               };
               b = getOther(_this.usingCorner.position, [wall.ref.a, wall.ref.b]).value;
-              addDiffs.push({
+              diffs.push({
                 operation: 'add',
                 type: 'wall',
                 obj: {
@@ -390,17 +375,7 @@ Editor = (function(_super) {
             }
             _this.usingCorner = void 0;
             _this.tempGraphics.clear();
-            _this.applyDiffs(removeDiffs);
-            d2 = [];
-            for (_j = 0, _len1 = addDiffs.length; _j < _len1; _j++) {
-              d = addDiffs[_j];
-              newer = _this.floorplan.addWall(d.obj);
-              for (_k = 0, _len2 = newer.length; _k < _len2; _k++) {
-                b = newer[_k];
-                d2.push(b);
-              }
-            }
-            _this.applyDiffs(d2);
+            _this.applyDiffs(diffs);
             return renderer.render(stage);
           }
         }
@@ -452,16 +427,12 @@ Editor = (function(_super) {
           wall.ref = diff.obj;
           this.walls.push(wall);
           corner1 = this.corners.createCorner(diff.obj.a.x, diff.obj.a.y);
-          if (!(isInArray(this.cornerLayer.children, corner1))) {
-            this.cornerLayer.addChild(corner1);
-            this.addCornerEvents(corner1);
-          }
+          this.cornerLayer.addChild(corner1);
+          this.addCornerEvents(corner1);
           corner1.walls.push(wall);
           corner2 = this.corners.createCorner(diff.obj.b.x, diff.obj.b.y);
-          if (!(isInArray(this.cornerLayer.children, corner2))) {
-            this.cornerLayer.addChild(corner2);
-            this.addCornerEvents(corner2);
-          }
+          this.cornerLayer.addChild(corner2);
+          this.addCornerEvents(corner2);
           corner2.walls.push(wall);
           this.wallLayer.addChild(wall);
           this.floorplan.walls.push(diff.obj);

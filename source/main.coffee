@@ -126,26 +126,16 @@ class Editor extends PIXI.DisplayObjectContainer
             if @drawMode is 'move'
                 if @usingCorner and (@usingCorner is corner)
                     @usingCorner.alpha = 1
-                    removeDiffs = []
-                    addDiffs = []
                     diffs = []
                     for wall in @usingCorner.walls
-                        removeDiffs.push {operation:'remove', type:'wall', obj:wall.ref}
+                        
+                        diffs.push {operation:'remove', type:'wall', obj:wall.ref}
                         a = x:e.global.x, y:e.global.y
                         b = getOther(@usingCorner.position, [wall.ref.a, wall.ref.b]).value
-                        addDiffs.push {operation:'add', type:'wall', obj:{a:a,b:b}}
+                        diffs.push  {operation:'add', type:'wall', obj:{a:a,b:b}}
                     @usingCorner = undefined
                     @tempGraphics.clear()
-                    # todo think of a way of combining these two removeDiffs/d2 succesfully.
-                    # maybe I can make a floorplan.updateWall function that returns a diff.
-
-                    @applyDiffs removeDiffs
-                    d2 = []
-                    for d in addDiffs
-                        newer = @floorplan.addWall(d.obj)
-                        for b in newer
-                            d2.push b
-                    @applyDiffs(d2)
+                    @applyDiffs diffs
                     renderer.render stage
 
         corner.mousemove = (e) =>
@@ -167,7 +157,6 @@ class Editor extends PIXI.DisplayObjectContainer
         if putInUndoStack
             @undoRedo.clearRedoFuture() # kill 'back to the future alternate timeline'
             @undoRedo.constructUndoable diffs
-        #console.log '...'
         for diff in diffs
             if diff.type is 'wall'
                 #console.log diff.operation, diff.obj.a, diff.obj.b
@@ -186,15 +175,13 @@ class Editor extends PIXI.DisplayObjectContainer
                     @walls.push wall
                     
                     corner1 = @corners.createCorner(diff.obj.a.x, diff.obj.a.y)
-                    if not (isInArray @cornerLayer.children, corner1) # this IF might be unneeded but I want to be sure
-                        @cornerLayer.addChild corner1
-                        @addCornerEvents corner1
+                    @cornerLayer.addChild corner1
+                    @addCornerEvents corner1
                     corner1.walls.push wall
                     
                     corner2 = @corners.createCorner(diff.obj.b.x, diff.obj.b.y)
-                    if not (isInArray @cornerLayer.children, corner2) # this IF might be unneeded but I want to be sure
-                        @cornerLayer.addChild corner2
-                        @addCornerEvents corner2
+                    @cornerLayer.addChild corner2
+                    @addCornerEvents corner2
                     corner2.walls.push wall
                     
                     @wallLayer.addChild wall
