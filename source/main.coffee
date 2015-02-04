@@ -13,7 +13,6 @@ removeItemFrom = (array, item) ->
 isInArray = (array, item) ->
     (array.indexOf item) isnt -1
 
-
 roundAllValues = (p) ->
     p.a.x = parseInt p.a.x
     p.a.y = parseInt p.a.y
@@ -23,7 +22,6 @@ roundAllValues = (p) ->
 
 pointAreEqual = (p1, p2) ->
     (p1.x is p2.x and p1.y is p2.y)
-        
 
 class CornerDict
     constructor: ->
