@@ -93,8 +93,8 @@ class Editor extends PIXI.DisplayObjectContainer
         @sp = startPosition
         @ep = undefined # paranoia
 
-    updateDrawingLine: (endPosition) ->
-        @ep = endPosition
+    updateDrawingLine: (tempPosition) ->
+        @ep = tempPosition
         @tempGraphics.clear()
         @tempGraphics.lineStyle(10,0xaa00aa)
         @tempGraphics.moveTo(@sp.x, @sp.y)
@@ -107,7 +107,37 @@ class Editor extends PIXI.DisplayObjectContainer
         @applyDiffs(@floorplan.addWall({a:@sp, b:@ep}))
         @sp = undefined
         @ep = undefined
-        
+
+# drawing Rects
+    startDrawingRect: (startPosition) ->
+        @drawingRect = true
+        @sp = startPosition
+        @ep = undefined
+
+    updateDrawingRect: (tempPosition) ->
+        @ep = tempPosition
+        @tempGraphics.clear()
+        @tempGraphics.lineStyle(10,0xaa00aa)
+        @tempGraphics.moveTo(@sp.x, @sp.y)
+        @tempGraphics.lineTo(@ep.x, @sp.y)
+        @tempGraphics.lineTo(@ep.x, @ep.y)
+        @tempGraphics.lineTo(@sp.x, @ep.y)
+        @tempGraphics.lineTo(@sp.x, @sp.y)
+
+    endDrawingRect: (endPosition = @ep) ->
+        @drawingRect = false
+        @ep = endPosition
+        @tempGraphics.clear()
+        diffs = []
+        diffs = diffs.concat(@floorplan.addWall({a:{x:@sp.x, y:@sp.y}, b:{x:@ep.x, y:@sp.y}}))
+        diffs = diffs.concat(@floorplan.addWall({a:{x:@ep.x, y:@sp.y}, b:{x:@ep.x, y:@ep.y}}))
+        diffs = diffs.concat(@floorplan.addWall({a:{x:@ep.x, y:@ep.y}, b:{x:@sp.x, y:@ep.y}}))
+        diffs = diffs.concat(@floorplan.addWall({a:{x:@sp.x, y:@ep.y}, b:{x:@sp.x, y:@sp.y}}))
+        @applyDiffs(diffs)
+        @sp = undefined
+        @ep = undefined
+
+
 # dragging Corners
     startDraggingCorner: (corner) ->
         @draggingCorner = corner
@@ -142,20 +172,26 @@ class Editor extends PIXI.DisplayObjectContainer
         underlay.mousedown = (e) =>
             if @mode is 'draw'
                 @startDrawingLine({x:e.global.x, y:e.global.y})
+            if @mode is 'rect'
+                @startDrawingRect({x:e.global.x, y:e.global.y})
 
         underlay.mousemove = (e) =>
             if @mode is 'draw' and @drawingLine
                 @updateDrawingLine({x:e.global.x, y:e.global.y})
+            if @mode is 'rect' and @drawingRect
+                @updateDrawingRect({x:e.global.x, y:e.global.y})
                
         underlay.mouseup = (e) =>
-            if @mode is 'draw' and (not pointAreEqual(@sp, @ep))
-                @endDrawingLine()
+            if @sp and @ep
+                if @mode is 'draw' and (not pointAreEqual(@sp, @ep))
+                    @endDrawingLine()
+                if @mode is 'rect' and (not pointAreEqual(@sp, @ep))
+                    @endDrawingRect()
 
     addCornerEvents: (corner) ->
         corner.mouseover = (e) =>
             @lastOverCorner = corner
             corner.scale = x:1.5, y:1.5
-
 
         corner.mouseout = (e) =>
             corner.scale = x:1, y:1
@@ -251,7 +287,6 @@ update = ->
 
 window.onload = ->
     update()
-
 
 window.undo = ->
     if editor.undoRedo.canUndo()

@@ -12,6 +12,8 @@
       <label for="draw">draw</label>
       <input id="move" type="radio" name="check" value="check2"  onchange="window.setDrawMode(this)">
       <label for="move">move</label>
+      <input id="rect" type="radio" name="check" value="check3"  onchange="window.setDrawMode(this)">
+      <label for="rect">rect</label>
     </span>
     <label id="counter"># walls:0</label>
     </span>
@@ -19,7 +21,7 @@
     <script src="lib/pixi.dev.js"></script>
     <script src="bundle.js"></script>
     <script>
-      var item = document.getElementById("draw").click();
+      var item = document.getElementById("rect").click();
     </script>
   </body>
 </html>
