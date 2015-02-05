@@ -154,6 +154,7 @@ class Editor extends PIXI.DisplayObjectContainer
     endDraggingCorner: (position)->
         @draggingCorner.alpha = 1
         diffs = []
+        toAdd = []
         for wall in @draggingCorner.walls
             diffs = diffs.concat(@floorplan.updateWall(wall, position, @draggingCorner.position))
         @draggingCorner = undefined
@@ -165,7 +166,10 @@ class Editor extends PIXI.DisplayObjectContainer
     addUnderlayEvents: (underlay) ->
         underlay.mousedown = (e) =>
             if @mode is 'draw'
-                @startDrawingLine({x:e.global.x, y:e.global.y})
+                if  @lastOverWall
+                    console.log 'should start drawing exactly on (snapping) this wall'
+                else
+                    @startDrawingLine({x:e.global.x, y:e.global.y})
             if @mode is 'rect'
                 @startDrawingRect({x:e.global.x, y:e.global.y})
 
@@ -178,7 +182,10 @@ class Editor extends PIXI.DisplayObjectContainer
         underlay.mouseup = (e) =>
             if @sp and @ep
                 if @mode is 'draw' and (not pointAreEqual(@sp, @ep))
-                    @endDrawingLine()
+                    if  @lastOverWall
+                        console.log 'should end drawing exactly on (snapping) this wall'
+                    else
+                        @endDrawingLine()
                 if @mode is 'rect' and (not pointAreEqual(@sp, @ep))
                     @endDrawingRect()
 
@@ -203,10 +210,22 @@ class Editor extends PIXI.DisplayObjectContainer
                     
         corner.mouseup = corner.mouseupoutside = (e) =>
             if @mode is 'move' and (@draggingCorner is corner)
-                @endDraggingCorner({x:e.global.x, y:e.global.y})
+                if @lastOverCorner and @lastOverCorner isnt corner
+                    @endDraggingCorner({x:@lastOverCorner.position.x, y:@lastOverCorner.position.y})
+                else
+                    @endDraggingCorner({x:e.global.x, y:e.global.y})
             if @mode is 'draw' and @drawingLine and (@lastOverCorner is corner)
                 @endDrawingLine( {x:corner.position.x, y:corner.position.y})
-                           
+
+    addWallEvents: (wall) ->
+        wall.mouseover = (e) =>
+            @lastOverWall = wall
+            wall.scale.y = 2
+        wall.mouseout = =>
+            @lastOverWall = undefined
+            wall.scale.y = 1
+        
+            
     applyDiffs: (diffs, putInUndoStack = true) ->
         if putInUndoStack
             @undoRedo.clearRedoFuture() # kill 'back to the future alternate timeline'
@@ -220,12 +239,13 @@ class Editor extends PIXI.DisplayObjectContainer
                     wall = new PIXI.Graphics()
                     wall.beginFill(0xffffff * Math.random())
                     {length, rotation} = getLengthAndRotation(diff.obj.a, diff.obj.b)
+                    wall.interactive = true
                     
                     wall.drawRect(0, -4, length, 8)
                     wall.position = diff.obj.a
                     wall.rotation = rotation
                     wall.ref = diff.obj
-                   
+                    @addWallEvents wall
                     @walls.push wall
                     
                     corner1 = @corners.createCorner(diff.obj.a.x, diff.obj.a.y)
