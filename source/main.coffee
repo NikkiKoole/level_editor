@@ -88,11 +88,12 @@ class Editor extends PIXI.DisplayObjectContainer
         @ep = undefined # paranoia
 
     updateDrawingLine: (tempPosition) ->
-        @ep = tempPosition
-        @tempGraphics.clear()
-        @tempGraphics.lineStyle(10,0xaa00aa)
-        @tempGraphics.moveTo(@sp.x, @sp.y)
-        @tempGraphics.lineTo(@ep.x, @ep.y)
+        if @sp
+            @ep = tempPosition
+            @tempGraphics.clear()
+            @tempGraphics.lineStyle(10,0xaa00aa)
+            @tempGraphics.moveTo(@sp.x, @sp.y)
+            @tempGraphics.lineTo(tempPosition.x, tempPosition.y)
         
     endDrawingLine: (endPosition = @ep) ->
         @ep = endPosition
@@ -185,9 +186,40 @@ class Editor extends PIXI.DisplayObjectContainer
                     if  @lastOverWall
                         console.log 'should end drawing exactly on (snapping) this wall'
                     else
-                        @endDrawingLine()
+                        @endDrawingLine({x:e.global.x, y:e.global.y})
                 if @mode is 'rect' and (not pointAreEqual(@sp, @ep))
                     @endDrawingRect()
+
+        # underlay.mousedown = (e) =>
+        #     if @sp is undefined
+        #         @sp = 1
+        #         @tp = undefined
+        #         @ep = undefined
+        #         console.log 'sp set'
+        #         @startDrawingLine({x:e.global.x, y:e.global.y})
+
+        #     else if (@sp and @tp)
+        #         @endDrawingLine({x:e.global.x, y:e.global.y})
+        #         @ep = 1
+        #         console.log 'ep set'
+        #         @sp = undefined
+        #         @ep = undefined
+        #         @tp = undefined
+                
+        # underlay.mouseup = (e) =>
+        #     if (@sp and @tp)
+        #         @endDrawingLine({x:e.global.x, y:e.global.y})
+        #         @ep = 1
+        #         console.log 'ep set'
+        #         @sp = undefined
+        #         @ep = undefined
+        #         @tp = undefined
+        # underlay.mousemove = (e) =>
+        #     if @sp
+        #         @tp = 2
+        #         console.log 'tp set'
+        #         @updateDrawingLine({x:e.global.x, y:e.global.y})
+        
 
     addCornerEvents: (corner) ->
         corner.mouseover = (e) =>
@@ -210,7 +242,9 @@ class Editor extends PIXI.DisplayObjectContainer
                     
         corner.mouseup = corner.mouseupoutside = (e) =>
             if @mode is 'move' and (@draggingCorner is corner)
-                if @lastOverCorner and @lastOverCorner isnt corner
+                if (@draggingCorner.walls.length > 1) and (@lastOverCorner and (@lastOverCorner isnt corner))
+                    console.log 'this is a problem not worth fixing atm.'
+                if @lastOverCorner and (@lastOverCorner isnt corner) and (@draggingCorner.walls.length is 1)
                     @endDraggingCorner({x:@lastOverCorner.position.x, y:@lastOverCorner.position.y})
                 else
                     @endDraggingCorner({x:e.global.x, y:e.global.y})
