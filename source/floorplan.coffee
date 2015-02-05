@@ -25,7 +25,15 @@ anyIsEqual = (collection, p) ->
         if pointsAreEqual c,p
             return true
     return false
+
+getIntersectionValues = (data) ->
+    intersections = []
+    for v in data
+        intersections.push v.intersection
+    intersections
     
+
+                
 module.exports = class Floorplan
     constructor: ->
         @walls = []
@@ -40,20 +48,7 @@ module.exports = class Floorplan
 
     addMultipleWalls: (walls) ->
         # this function is very similar to the single wall addWall version.
-        # the difference is the possibility of more then one of the walls you are adding subdividing the same already thefre wall.
-        #
-        #  ...........
-        #  .         .1
-        #  .     .........
-        #  .     .   .2  .
-        #  .     .   .   .
-        #  .     .........
-        #  .         .3
-        #  . .........
-        #
-       
         diff = []
-        # at its basis this function just does 4 walls as opposed to 1
         intersections = []
         for wall,i in walls
             for w,j in @walls
@@ -63,23 +58,22 @@ module.exports = class Floorplan
 
         # now can I just run through all existing walls and see what I should do?
         for existing,index in @walls
-            console.log 'index: ',index,(i for i in intersections when i.oldWallIndex is index)
-            # todo make a better subdivideExistingWall that handles these cases
+            #console.log 'exitsting index: ',index,(i for i in intersections when i.oldWallIndex is index)
+            data = (i for i in intersections when i.oldWallIndex is index)
+            if data.length > 0
+                inters = getIntersectionValues(data) 
+                subdivideNewWall(inters, diff, @walls, existing)
+                diff.push ({operation:'remove', type:'wall', obj:existing})
 
         # now can I just run through all 4 walls and see what I should do with them?
         for newer,index in walls
             data = (i for i in intersections when i.newWallIndex is index)
-            if data.length is 0 # this new wall doesnt have any intersections, so it's the simnplest   
+            if data.length is 0 # this new wall doesnt have any intersections, so it's the simplest   
                 addWallSimply(newer, diff, @walls)
             else
                 # this code is very duplicate from the addWall
-                inters = []
-                for inter in data
-                    inters.push inter.intersection
-                orderIntersections(newer, inters)
-                inters.unshift(newer.a)
-                inters.push(newer.b)
-                subdivideNewWall(inters, diff, @walls)
+                inters = getIntersectionValues(data)
+                subdivideNewWall(inters, diff, @walls, newer)
                                 
         #console.log intersections
         return diff
@@ -101,10 +95,8 @@ module.exports = class Floorplan
         if intersections.length is 0
             addWallSimply(wall, diff, @walls)
         else
-            orderIntersections(wall, intersections)
-            intersections.unshift(wall.a)
-            intersections.push(wall.b)
-            subdivideNewWall(intersections, diff, @walls)
+            inters = intersections
+            subdivideNewWall(inters, diff, @walls, wall)
         return diff
 
 
@@ -119,7 +111,11 @@ subdivideExistingWall = (intersection, wall, diff, walls) ->
     diff.push ({operation:'add', type:'wall', obj:part2})
     diff
 
-subdivideNewWall = (intersections, diff, walls) ->
+subdivideNewWall = (intersections, diff, walls, toUse) ->
+    orderIntersections(toUse, intersections)
+    intersections.unshift(toUse.a)
+    intersections.push(toUse.b)
+
     for s,i in intersections
         if i >= intersections.length-1
             continue
